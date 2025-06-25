@@ -140,7 +140,7 @@ class MahjongEngine:
                     if player.can_call_chii(self.last_discard, True):
                         actions.append("chii")
         
-        actions.append("pass")
+                actions.append("pass")
         return actions
 
     def execute_action(self, player_index: int, action: str, **kwargs) -> Dict[str, Any]:
