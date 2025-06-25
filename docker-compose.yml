@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  mahjong-engine:
+    build: .
+    container_name: riichi-mahjong-engine
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests
+    environment:
+      - PYTHONPATH=/app/src
+      - DEBUG=true
+    stdin_open: true
+    tty: true
+    command: python src/main.py
+
+  mahjong-web:
+    build: .
+    container_name: riichi-mahjong-web
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./src:/app/src
+      - ./web:/app/web
+    environment:
+      - PYTHONPATH=/app/src
+      - FLASK_ENV=development
+    command: python src/web_server.py
+    depends_on:
+      - mahjong-engine
+
+  redis:
+    image: redis:alpine
+    container_name: mahjong-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:

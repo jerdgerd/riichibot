@@ -1,0 +1,86 @@
+{
+    "name": "Riichi Mahjong Development",
+    "dockerComposeFile": [
+        "docker-compose.dev.yml"
+    ],
+    "service": "mahjong-dev",
+    "workspaceFolder": "/app",
+    "shutdownAction": "stopCompose",
+    "remoteUser": "vscode",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.flake8",
+                "ms-python.black-formatter",
+                "ms-python.mypy-type-checker",
+                "ms-python.pylint",
+                "ms-toolsai.jupyter",
+                "ms-vscode.test-adapter-converter",
+                "littlefoxteam.vscode-python-test-adapter",
+                "formulahendry.code-runner",
+                "ms-vscode.vscode-json",
+                "redhat.vscode-yaml",
+                "ms-azuretools.vscode-docker",
+                "github.copilot",
+                "github.copilot-chat",
+                "ms-vscode.live-server"
+            ],
+            "settings": {
+                "python.defaultInterpreterPath": "/usr/local/bin/python",
+                "python.linting.enabled": true,
+                "python.linting.pylintEnabled": false,
+                "python.linting.flake8Enabled": true,
+                "python.linting.mypyEnabled": true,
+                "python.formatting.provider": "black",
+                "python.formatting.blackArgs": [
+                    "--line-length",
+                    "88"
+                ],
+                "python.testing.pytestEnabled": true,
+                "python.testing.pytestArgs": [
+                    "tests/"
+                ],
+                "python.testing.unittestEnabled": false,
+                "python.testing.autoTestDiscoverOnSaveEnabled": true,
+                "editor.formatOnSave": true,
+                "editor.codeActionsOnSave": {
+                    "source.organizeImports": true
+                },
+                "files.exclude": {
+                    "**/__pycache__": true,
+                    "**/*.pyc": true,
+                    "**/.pytest_cache": true,
+                    "**/.mypy_cache": true,
+                    "**/htmlcov": true
+                },
+                "terminal.integrated.defaultProfile.linux": "bash"
+            }
+        }
+    },
+    "forwardPorts": [
+        8000,
+        8080,
+        6380
+    ],
+    "portsAttributes": {
+        "8000": {
+            "label": "Mahjong Engine",
+            "onAutoForward": "notify"
+        },
+        "8080": {
+            "label": "Web Interface",
+            "onAutoForward": "openBrowser"
+        },
+        "6380": {
+            "label": "Redis Dev",
+            "onAutoForward": "silent"
+        }
+    },
+    "postCreateCommand": "pip install -e . && pre-commit install",
+    "postStartCommand": "echo 'Riichi Mahjong development environment ready!'",
+    "features": {
+        "ghcr.io/devcontainers/features/git:1": {},
+        "ghcr.io/devcontainers/features/github-cli:1": {}
+    }
+}

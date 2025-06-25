@@ -1,0 +1,38 @@
+services:
+  mahjong-dev:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    container_name: riichi-mahjong-dev-${USER:-vscode}
+    volumes:
+      - ..:/app:cached
+      - vscode-extensions:/home/vscode/.vscode-server/extensions
+      - vscode-extensions-insiders:/home/vscode/.vscode-server-insiders/extensions
+    environment:
+      - PYTHONPATH=/app/src
+      - PYTHONDONTWRITEBYTECODE=1
+      - PYTHONUNBUFFERED=1
+      - DEBUG=true
+      - FLASK_ENV=development
+    ports:
+      - "8000:8000"
+      - "8080:8080"
+      - "5678:5678"
+    stdin_open: true
+    tty: true
+    command: sleep infinity
+    depends_on:
+      - redis-dev
+
+  redis-dev:
+    image: redis:alpine
+    container_name: mahjong-redis-dev-${USER:-vscode}
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_dev_data:/data
+
+volumes:
+  vscode-extensions:
+  vscode-extensions-insiders:
+  redis_dev_data:

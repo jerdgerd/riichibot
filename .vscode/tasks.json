@@ -1,0 +1,199 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Run Tests",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "-m",
+                "pytest",
+                "tests/",
+                "-v"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "options": {
+                "env": {
+                    "PYTHONPATH": "${workspaceFolder}/src"
+                }
+            }
+        },
+        {
+            "label": "Run Tests with Coverage",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "-m",
+                "pytest",
+                "tests/",
+                "--cov=src",
+                "--cov-report=html"
+            ],
+            "group": "test",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "options": {
+                "env": {
+                    "PYTHONPATH": "${workspaceFolder}/src"
+                }
+            }
+        },
+        {
+            "label": "Format Code",
+            "type": "shell",
+            "command": "black",
+            "args": [
+                "src/",
+                "tests/"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Lint Code",
+            "type": "shell",
+            "command": "flake8",
+            "args": [
+                "src/"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Type Check",
+            "type": "shell",
+            "command": "mypy",
+            "args": [
+                "src/"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Start Mahjong Engine",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "src/main.py"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "options": {
+                "env": {
+                    "PYTHONPATH": "${workspaceFolder}/src"
+                }
+            }
+        },
+        {
+            "label": "Start Web Server",
+            "type": "shell",
+            "command": "python",
+            "args": [
+                "src/web_server.py"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            },
+            "options": {
+                "env": {
+                    "PYTHONPATH": "${workspaceFolder}/src",
+                    "FLASK_ENV": "development"
+                }
+            }
+        },
+        {
+            "label": "Install Dependencies",
+            "type": "shell",
+            "command": "pip",
+            "args": [
+                "install",
+                "-r",
+                "requirements-dev.txt"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Clean Cache",
+            "type": "shell",
+            "command": "find",
+            "args": [
+                ".",
+                "-type",
+                "d",
+                "-name",
+                "__pycache__",
+                "-exec",
+                "rm",
+                "-rf",
+                "{}",
+                "+",
+                "2>/dev/null",
+                "||",
+                "true"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        },
+        {
+            "label": "Run Pre-commit",
+            "type": "shell",
+            "command": "pre-commit",
+            "args": [
+                "run",
+                "--all-files"
+            ],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": false,
+                "panel": "shared"
+            }
+        }
+    ]
+}

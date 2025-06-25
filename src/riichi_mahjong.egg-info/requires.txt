@@ -1,0 +1,16 @@
+dataclasses-json>=0.5.9
+typing-extensions>=4.7.1
+flask>=2.3.2
+flask-socketio>=5.3.4
+redis>=4.6.0
+
+[dev]
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-xdist>=3.3.1
+pytest-mock>=3.11.1
+black>=23.7.0
+flake8>=6.0.0
+mypy>=1.5.1
+pre-commit>=3.3.3
+debugpy>=1.6.7

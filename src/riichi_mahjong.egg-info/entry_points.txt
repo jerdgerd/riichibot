@@ -1,0 +1,3 @@
+[console_scripts]
+mahjong-engine = main:main
+mahjong-web = web_server:main
