@@ -1,7 +1,7 @@
 from typing import List, Dict, Optional
 from dataclasses import dataclass
-from ..tiles.tile import Tile, Suit, Wind, Dragon
-from .hand import Hand, Meld
+from tiles.tile import Tile, Suit, Wind, Dragon
+from game.hand import Hand, Meld
 
 @dataclass
 class Yaku:

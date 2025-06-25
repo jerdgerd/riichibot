@@ -1,12 +1,12 @@
 from typing import List, Optional, Dict, Any
 from enum import Enum 
 import random
-from .player import Player
-from .hand import Hand, Meld
-from .rules import YakuChecker
-from .scoring import Scoring
-from ..tiles.tile import Tile, Wind
-from ..tiles.wall import Wall
+from game.player import Player
+from game.hand import Hand, Meld
+from game.rules import YakuChecker
+from game.scoring import Scoring
+from tiles.tile import Tile, Wind
+from tiles.wall import Wall
 
 class GamePhase(Enum):
     DEALING = "dealing"

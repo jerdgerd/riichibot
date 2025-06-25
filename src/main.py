@@ -6,8 +6,12 @@ Main entry point for Riichi Mahjong Engine
 from game.engine import MahjongEngine
 import json
 
+# Create game object at module level so it's accessible in interactive mode
+game = None
+
 def main():
     """Main game loop for testing"""
+    global game
     print("Starting Riichi Mahjong Engine...")
     
     # Create game with 4 players

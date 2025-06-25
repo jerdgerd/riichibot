@@ -3,7 +3,7 @@ Constants and utility functions for Riichi Mahjong
 """
 
 from typing import Dict, List
-from ..tiles.tile import Tile, Suit, Wind, Dragon
+from tiles.tile import Tile, Suit, Wind, Dragon
 
 # Scoring constants
 STARTING_POINTS = 25000

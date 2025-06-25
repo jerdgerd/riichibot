@@ -1,6 +1,6 @@
 from typing import List, Optional
-from .hand import Hand, Meld
-from ..tiles.tile import Tile, Wind
+from game.hand import Hand, Meld
+from tiles.tile import Tile, Wind
 
 class Player:
     def __init__(self, name: str, seat_wind: Wind):

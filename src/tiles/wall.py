@@ -1,6 +1,6 @@
 import random
 from typing import List
-from .tile import Tile, Suit, Wind, Dragon
+from tiles.tile import Tile, Suit, Wind, Dragon
 
 class Wall:
     def __init__(self, use_red_fives: bool = True):

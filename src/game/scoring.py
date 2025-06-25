@@ -1,6 +1,6 @@
 from typing import List, Tuple, Dict
-from .rules import Yaku
-from .player import Player
+from game.rules import Yaku
+from game.player import Player
 
 class Scoring:
     """Handle scoring calculations"""
