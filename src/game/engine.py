@@ -119,12 +119,29 @@ class MahjongEngine:
         
         if self.current_player == player_index:
             # Current player's turn
-            if len(player.hand.concealed_tiles) == 14:
+            hand_size = len(player.hand.concealed_tiles)
+            
+            if hand_size == 14:
                 actions.append("discard")
                 if player.can_tsumo():
                     actions.append("tsumo")
                 if self._can_declare_riichi(player_index):
                     actions.append("riichi")
+            elif hand_size == 13:
+                # Player needs to draw first - this shouldn't happen in normal flow
+                # Force a tile draw if wall has tiles
+                if self.wall.tiles_remaining() > 0:
+                    tile = self.wall.draw_tile()
+                    player.draw_tile(tile)
+                    # Now they should be able to discard
+                    actions.append("discard")
+                    if player.can_tsumo():
+                        actions.append("tsumo")
+                    if self._can_declare_riichi(player_index):
+                        actions.append("riichi")
+                else:
+                    # Wall empty, handle draw
+                    pass
         else:
             # Other players can call discards
             if self.last_discard:
@@ -139,8 +156,9 @@ class MahjongEngine:
                 if (self.last_discard_player + 1) % 4 == player_index:
                     if player.can_call_chii(self.last_discard, True):
                         actions.append("chii")
-        
+                
                 actions.append("pass")
+        
         return actions
 
     def execute_action(self, player_index: int, action: str, **kwargs) -> Dict[str, Any]:

@@ -148,11 +148,11 @@ class EnhancedTrainingManager:
                 print(f"Hand size: {len(current_player.hand.concealed_tiles)}")
                 print(f"Is current player: {current_player_idx == game.current_player}")
                 print(f"Last discard: {game.last_discard}")
+                print(f"Wall remaining: {game.wall.tiles_remaining()}")
                 break
             
             # Player chooses action
             action, kwargs = current_player.choose_action(game_state, player_hand, valid_actions)
-            
             # Execute action
             result = game.execute_action(current_player_idx, action, **kwargs)
             
@@ -177,26 +177,19 @@ class EnhancedTrainingManager:
                 
                 break
             
-            # Handle turn advancement based on action type
-            if action == "discard":
-                # After discard, check if other players want to call
-                # This is handled by the game engine's call system
-                # We need to give other players a chance to respond
-                self._handle_discard_responses(game, players, current_player_idx)
-            elif action in ["chii", "pon", "kan"]:
-                # Player who called becomes current player (already handled in execute_action)
+            # Simple turn advancement - only advance if it was a discard and no calls
+            if action == "discard" and game.last_discard is not None:
+                # Let other players respond in next iterations
                 pass
             elif action == "pass":
-                # Continue checking other players for calls
+                # Continue to next player who might want to call
                 pass
-            elif action in ["tsumo", "ron", "riichi"]:
-                # These actions have specific handling
-                if action == "riichi":
-                    # After riichi discard, check for calls
-                    self._handle_discard_responses(game, players, current_player_idx)
+            elif action in ["chii", "pon", "kan"]:
+                # Caller becomes current player (handled in execute_action)
+                game.last_discard = None  # Clear the discard
             
-            # If no calls were made after a discard, advance turn
-            if game.last_discard is None or self._all_players_passed(game, players):
+            # Check if we should advance turn (no pending calls)
+            if self._should_advance_turn(game, action):
                 game.advance_turn()
             
             turn_count += 1
@@ -216,86 +209,166 @@ class EnhancedTrainingManager:
             'score': result.get('score', 0)
         }
 
-    def _handle_discard_responses(self, game, players, discarder_idx):
-        """Handle other players' responses to a discard"""
-        if not game.last_discard:
-            return
+    def _should_advance_turn(self, game, last_action):
+        """Determine if turn should advance"""
+        # Advance turn after discard if no one can call
+        if last_action == "discard" and game.last_discard is not None:
+            # Check if any other player can call
+            for i in range(4):
+                if i != game.current_player:
+                    actions = game.get_valid_actions(i)
+                    if any(action != "pass" for action in actions):
+                        return False  # Someone can call, don't advance
+            return True  # No one can call, advance turn
         
-        # Check each player (in order) for possible calls
-        for i in range(1, 4):  # Check next 3 players
-            responder_idx = (discarder_idx + i) % 4
-            responder = players[responder_idx]
-            
-            valid_actions = game.get_valid_actions(responder_idx)
-            
-            # Skip if no actions available (shouldn't happen if there's a discard)
-            if not valid_actions:
-                continue
-            
-            # If only "pass" is available, auto-pass
-            if valid_actions == ["pass"]:
-                continue
-            
-            # Let player choose response
-            game_state = game.get_game_state()
-            player_hand = game.get_player_hand(responder_idx)
-            action, kwargs = responder.choose_action(game_state, player_hand, valid_actions)
-            
-            # Execute response
-            result = game.execute_action(responder_idx, action, **kwargs)
-            
-            if result["success"]:
-                reward = self.calculate_enhanced_reward(action, result, player_hand, game_state)
-                responder.give_reward(reward)
-                
-                # If player called (not passed), break the response chain
-                if action != "pass":
-                    break
-            else:
-                responder.give_reward(self.config.invalid_action_penalty)
+        return False
 
-    def _all_players_passed(self, game, players):
-        """Check if all players have passed on the current discard"""
-        # This is a simplified check - in a full implementation,
-        # you'd track who has responded to the current discard
-        return game.last_discard is not None
 
     def calculate_enhanced_reward(self, action: str, result: Dict[str, Any], 
                                 player_hand: Dict[str, Any], game_state: Dict[str, Any]) -> float:
-        """Calculate enhanced reward based on game context"""
+        """Calculate enhanced reward based on game context with progress incentives"""
+        
+        # Winning actions get maximum reward
         if action == "tsumo" or action == "ron":
             return self.config.win_reward
-        elif action == "riichi":
-            return self.config.riichi_reward
-        elif action == "discard":
-            # Reward for maintaining tenpai
-            if player_hand.get('is_tenpai', False):
-                return self.config.tenpai_reward
-            # Small penalty for breaking tenpai
-            elif len(player_hand.get('winning_tiles', [])) == 0:
-                return self.config.base_reward * 0.5
-            return self.config.base_reward
-        elif action in ["chii", "pon", "kan"]:
-            # Reward calls that improve hand
-            return self.config.base_reward * 2
         
-        return self.config.base_reward
-    
+        elif action == "riichi":
+            # Bonus for riichi based on hand quality
+            winning_tiles = len(player_hand.get('winning_tiles', []))
+            riichi_bonus = winning_tiles * 0.5  # More waits = better riichi
+            return self.config.riichi_reward + riichi_bonus
+        
+        elif action == "discard":
+            # Get hand analysis
+            is_tenpai = player_hand.get('is_tenpai', False)
+            winning_tiles = len(player_hand.get('winning_tiles', []))
+            concealed_tiles = len(player_hand.get('concealed_tiles', []))
+            
+            # Reward structure based on hand progress
+            if is_tenpai:
+                # Strong reward for maintaining tenpai
+                tenpai_bonus = winning_tiles * 0.3  # More waits = better
+                return self.config.tenpai_reward + tenpai_bonus
+            
+            elif winning_tiles > 0:
+                # Reward for being close to tenpai (1-shanten, 2-shanten, etc.)
+                # More winning tiles = closer to tenpai = better reward
+                progress_reward = self.config.base_reward * (1 + winning_tiles * 0.2)
+                return progress_reward
+            
+            else:
+                # Small penalty for having no clear path to winning
+                # Encourage players to work toward tenpai
+                stagnation_penalty = self.config.base_reward * 0.3
+                return -stagnation_penalty
+        
+        elif action in ["chii", "pon", "kan"]:
+            # Analyze if the call improves the hand
+            winning_tiles = len(player_hand.get('winning_tiles', []))
+            
+            if winning_tiles > 0:
+                # Good call that maintains winning potential
+                call_bonus = self.config.base_reward * (2 + winning_tiles * 0.1)
+                return call_bonus
+            else:
+                # Call that doesn't help winning - small penalty
+                return self.config.base_reward * 0.5
+        
+        elif action == "pass":
+            # Small reward for passing when appropriate
+            # (avoiding bad calls is good strategy)
+            return self.config.base_reward * 0.1
+        
+        # Default small reward for valid actions
+        return self.config.base_reward * 0.5
+
     def calculate_final_reward(self, won: bool, final_score: int, result: Dict[str, Any]) -> float:
-        """Calculate final game reward"""
+        """Calculate final game reward with bonuses but no draw penalties"""
+        
         if won:
+            # Victory rewards
             base_reward = self.config.win_reward
+            
             # Bonus for high-scoring wins
             score_bonus = result.get('score', 0) / 1000.0
-            # Bonus for multiple yaku
-            yaku_bonus = len(result.get('yaku', [])) * 0.5
-            return base_reward + score_bonus + yaku_bonus
+            
+            # Bonus for multiple yaku (skillful play)
+            yaku_bonus = len(result.get('yaku', [])) * 1.0
+            
+            # Bonus for winning method
+            win_method_bonus = 0
+            if result.get('yaku'):
+                # Check for special yaku that indicate good play
+                yaku_names = [y.get('name', '') for y in result.get('yaku', [])]
+                if 'riichi' in yaku_names:
+                    win_method_bonus += 2.0
+                if 'tanyao' in yaku_names or 'pinfu' in yaku_names:
+                    win_method_bonus += 1.0
+            
+            return base_reward + score_bonus + yaku_bonus + win_method_bonus
+        
         else:
-            # Penalty based on final position
-            penalty = -5.0
-            # Adjust based on final score
-            score_adjustment = (final_score - 25000) / 2000.0
-            return penalty + score_adjustment
+            # Loss handling without draw penalties
+            winner = result.get('winner', -1)
+            
+            if winner == -1:
+                # Game ended in draw - neutral outcome
+                # Small bonus if player was tenpai at end
+                tenpai_players = result.get('tenpai_players', [])
+                player_index = result.get('player_index', -1)  # Would need to pass this
+                
+                if player_index in tenpai_players:
+                    # Small reward for being tenpai in draw
+                    return 2.0
+                else:
+                    # Neutral for not being tenpai in draw
+                    return 0.0
+            
+            else:
+                # Someone else won - small penalty based on placement
+                base_penalty = -3.0
+                
+                # Less penalty if you placed well
+                final_position = self._calculate_position(final_score, result.get('final_scores', []))
+                position_adjustment = (4 - final_position) * 1.0  # 2nd place gets +2, 3rd gets +1
+                
+                # Score-based adjustment
+                score_diff = final_score - 25000
+                score_adjustment = score_diff / 5000.0
+                
+                return base_penalty + position_adjustment + score_adjustment
+
+    def _calculate_position(self, player_score: int, all_scores: List[int]) -> int:
+        """Calculate player's final position (1st, 2nd, 3rd, 4th)"""
+        sorted_scores = sorted(all_scores, reverse=True)
+        try:
+            return sorted_scores.index(player_score) + 1
+        except ValueError:
+            return 4  # Default to last place if not found
+
+    # Additional method to track and reward progress during game
+    def give_progress_reward(self, player, previous_hand_state: Dict, current_hand_state: Dict):
+        """Give additional rewards for hand improvement during the game"""
+        
+        prev_winning_tiles = len(previous_hand_state.get('winning_tiles', []))
+        curr_winning_tiles = len(current_hand_state.get('winning_tiles', []))
+        
+        prev_tenpai = previous_hand_state.get('is_tenpai', False)
+        curr_tenpai = current_hand_state.get('is_tenpai', False)
+        
+        # Reward for achieving tenpai
+        if not prev_tenpai and curr_tenpai:
+            player.give_reward(3.0)
+        
+        # Reward for improving winning tile count
+        elif curr_winning_tiles > prev_winning_tiles:
+            improvement_reward = (curr_winning_tiles - prev_winning_tiles) * 0.5
+            player.give_reward(improvement_reward)
+        
+        # Small penalty for getting further from tenpai
+        elif curr_winning_tiles < prev_winning_tiles:
+            regression_penalty = (prev_winning_tiles - curr_winning_tiles) * -0.3
+            player.give_reward(regression_penalty)
     
     def get_milestone_stats(self, players: List[NeuralPlayer]) -> Dict[str, Any]:
         """Get milestone statistics"""
@@ -309,7 +382,7 @@ class EnhancedTrainingManager:
                 'avg_loss': player_stats['avg_recent_loss']
             }
         return stats
-    
+
     def save_all_models(self, players: List[NeuralPlayer]):
         """Save all player models"""
         for i, player in enumerate(players):
