@@ -94,7 +94,11 @@ FAST_TRAINING_CONFIG = TrainingConfig(
     save_interval=50,
     eval_interval=100,
     learning_rate=0.01,
-    epsilon_decay=0.99,
+    epsilon_start=1.0,  # full exploration at start
+    epsilon_min=0.05,  # don't drop to near-zero too soon
+    epsilon_decay=0.997,  # slower decay → longer exploration
+    memory_size=15000,  # allow more varied experience
+    batch_size=64,  # slightly bigger batches for stability
 )
 
 DEEP_TRAINING_CONFIG = TrainingConfig(

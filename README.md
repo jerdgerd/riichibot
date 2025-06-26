@@ -284,8 +284,7 @@ Hand completion detection
 Meld formation and validation
 Yaku detection and scoring
 Player actions and game flow
-Furiten rule implementation
-API endpoints and responses
+Basic Rule implementations
 
 ## DEPLOYMENT
 # DOCKER PRODUCTION
@@ -312,24 +311,6 @@ DEBUG=false
 FLASK_ENV=production
 REDIS_URL=redis://redis:6379/0
 ```
-
-## CONTRIBUTING
-Fork the repository
-Create a feature branch: git checkout -b feature/amazing-feature
-Open in dev container for consistent environment
-Make changes with proper tests and documentation
-Run quality checks: make lint test
-Commit changes: git commit -m 'Add amazing feature'
-Push to branch: git push origin feature/amazing-feature
-Submit pull request
-
-## CODE STYLE
-Formatting: Black with 88-character line length
-Linting: Flake8 with E203 exception for Black compatibility
-Type Hints: Required for all public functions
-Documentation: Docstrings for all classes and methods
-Testing: Minimum 80% code coverage required
-
 ## PRE-COMMIT HOOKS
 ```bash
 # Install hooks
@@ -343,10 +324,6 @@ pre-commit run --all-files
 License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Acknowledgments
-    Riichi Mahjong Rules: Based on Japanese Mahjong Association standards
-    Scoring System: Implements standard han/fu calculation
-    Unicode Tiles: Uses standard mahjong tile Unicode characters
 ## Roadmap
  Advanced Yaku: Implement remaining yakuman and rare yaku
  AI Players: Add computer opponents with different skill levels
@@ -354,6 +331,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
  Replay System: Game recording and playback
  Mobile App: React Native mobile interface
  Statistics: Player statistics and game analytics
- Localization: Multi-language support
 ## Support
     Issues: Report bugs and feature requests on GitHub Issues
