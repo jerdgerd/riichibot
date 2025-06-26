@@ -1,6 +1,7 @@
-from typing import List, Set, Optional, Tuple
 from dataclasses import dataclass
-from tiles.tile import Tile, Suit
+from typing import List, Optional, Set, Tuple
+
+from tiles.tile import Suit, Tile
 
 
 @dataclass
@@ -93,7 +94,7 @@ class Hand:
             for value in range(1, 10):
                 tiles.append(Tile(suit, value))
         # Honor tiles
-        from tiles.tile import Wind, Dragon
+        from tiles.tile import Dragon, Wind
 
         for wind in Wind:
             tiles.append(Tile(Suit.WIND, wind=wind))
