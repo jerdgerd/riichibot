@@ -282,6 +282,54 @@ class TestMahjongEngine:
 
         assert not YakuChecker._check_pinfu(hand, winning_tile, Wind.EAST, Wind.EAST)
 
+    def test_chiitoitsu_yaku(self):
+        """Test chiitoitsu detection"""
+        from src.game.rules import YakuChecker
+
+        hand = Hand()
+        hand.concealed_tiles = [
+            Tile(Suit.SOUZU, 1),
+            Tile(Suit.SOUZU, 1),
+            Tile(Suit.SOUZU, 2),
+            Tile(Suit.SOUZU, 2),
+            Tile(Suit.PINZU, 3),
+            Tile(Suit.PINZU, 3),
+            Tile(Suit.PINZU, 4),
+            Tile(Suit.PINZU, 4),
+            Tile(Suit.MANZU, 5),
+            Tile(Suit.MANZU, 5),
+            Tile(Suit.MANZU, 6),
+            Tile(Suit.MANZU, 6),
+            Tile(Suit.WIND, wind=Wind.EAST),
+        ]
+        winning_tile = Tile(Suit.WIND, wind=Wind.EAST)
+
+        assert YakuChecker._check_chiitoitsu(hand, winning_tile)
+
+    def test_kokushi_yaku(self):
+        """Test kokushi detection"""
+        from src.game.rules import YakuChecker
+
+        hand = Hand()
+        hand.concealed_tiles = [
+            Tile(Suit.SOUZU, 1),
+            Tile(Suit.SOUZU, 9),
+            Tile(Suit.PINZU, 1),
+            Tile(Suit.PINZU, 9),
+            Tile(Suit.MANZU, 1),
+            Tile(Suit.MANZU, 9),
+            Tile(Suit.WIND, wind=Wind.EAST),
+            Tile(Suit.WIND, wind=Wind.SOUTH),
+            Tile(Suit.WIND, wind=Wind.WEST),
+            Tile(Suit.WIND, wind=Wind.NORTH),
+            Tile(Suit.DRAGON, dragon=Dragon.WHITE),
+            Tile(Suit.DRAGON, dragon=Dragon.GREEN),
+            Tile(Suit.DRAGON, dragon=Dragon.RED),
+        ]
+        winning_tile = Tile(Suit.SOUZU, 1)
+
+        assert YakuChecker._check_kokushi(hand, winning_tile)
+
     def test_riichi_prevents_added_kan(self):
         """Test riichi blocks added kan from an open pon"""
         players = ["Alice", "Bob", "Charlie", "David"]

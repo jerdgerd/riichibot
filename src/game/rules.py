@@ -42,6 +42,12 @@ class YakuChecker:
         if YakuChecker._check_pinfu(hand, winning_tile, seat_wind, round_wind):
             yaku_list.append(Yaku("Pinfu", 1, closed_only=True))
 
+        if YakuChecker._check_chiitoitsu(hand, winning_tile):
+            yaku_list.append(Yaku("Chiitoitsu", 2, closed_only=True))
+
+        if YakuChecker._check_kokushi(hand, winning_tile):
+            yaku_list.append(Yaku("Kokushi Musou", 13, closed_only=True))
+
         yakuhai_count = YakuChecker._check_yakuhai(hand, seat_wind, round_wind)
         for _ in range(yakuhai_count):
             yaku_list.append(Yaku("Yakuhai", 1))
@@ -179,6 +185,56 @@ class YakuChecker:
                 return False  # 7-8-9 won on 7 -> edge wait
 
             return True
+
+        return False
+
+    @staticmethod
+    def _check_chiitoitsu(hand: Hand, winning_tile: Tile) -> bool:
+        """Check for seven pairs."""
+        if not hand.is_closed():
+            return False
+
+        tiles = hand.concealed_tiles[:]
+        if winning_tile not in tiles:
+            tiles.append(winning_tile)
+
+        if len(tiles) != 14:
+            return False
+
+        pair_counts = [tiles.count(tile) for tile in set(tiles)]
+        return len(pair_counts) == 7 and all(count == 2 for count in pair_counts)
+
+    @staticmethod
+    def _check_kokushi(hand: Hand, winning_tile: Tile) -> bool:
+        """Check for thirteen orphans."""
+        if not hand.is_closed():
+            return False
+
+        tiles = hand.concealed_tiles[:]
+        if winning_tile not in tiles:
+            tiles.append(winning_tile)
+
+        if len(tiles) != 14:
+            return False
+
+        terminals_and_honors = []
+        for suit in [Suit.SOUZU, Suit.PINZU, Suit.MANZU]:
+            terminals_and_honors.append(Tile(suit, 1))
+            terminals_and_honors.append(Tile(suit, 9))
+
+        for wind in Wind:
+            terminals_and_honors.append(Tile(Suit.WIND, wind=wind))
+        for dragon in Dragon:
+            terminals_and_honors.append(Tile(Suit.DRAGON, dragon=dragon))
+
+        unique_needed = set(terminals_and_honors)
+        tile_set = set(tiles)
+        if not unique_needed.issubset(tile_set):
+            return False
+
+        for tile in unique_needed:
+            if tiles.count(tile) >= 2:
+                return True
 
         return False
 
