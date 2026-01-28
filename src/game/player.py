@@ -111,6 +111,28 @@ class Player:
 
         self.hand.add_meld(meld)
 
+    def can_upgrade_pon_to_kan(self, tile: Tile) -> bool:
+        """Check if an open pon can be upgraded to kan"""
+        if tile not in self.hand.concealed_tiles:
+            return False
+
+        for meld in self.hand.melds:
+            if meld.is_triplet() and meld.is_open and meld.tiles[0] == tile:
+                return True
+        return False
+
+    def upgrade_pon_to_kan(self, tile: Tile):
+        """Upgrade an open pon meld to a kan"""
+        if not self.can_upgrade_pon_to_kan(tile):
+            raise ValueError("Cannot upgrade pon to kan")
+
+        self.hand.remove_tile(tile)
+
+        for meld in self.hand.melds:
+            if meld.is_triplet() and meld.is_open and meld.tiles[0] == tile:
+                meld.tiles.append(tile)
+                return
+
     def declare_riichi(self, turn: int):
         """Declare riichi"""
         if self.score < 1000:

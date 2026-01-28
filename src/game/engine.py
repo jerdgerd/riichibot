@@ -114,6 +114,8 @@ class MahjongEngine:
             "winning_tiles": [str(tile) for tile in player.hand.get_winning_tiles()],
             "is_tenpai": player.is_tenpai(),
             "can_riichi": self._can_declare_riichi(player_index),
+            "closed_kan_tiles": self.can_call_closed_kan(player_index),
+            "upgrade_kan_tiles": self.can_upgrade_pon_to_kan(player_index),
         }
 
     def get_valid_actions(self, player_index: int) -> List[str]:
@@ -131,6 +133,10 @@ class MahjongEngine:
                     player, player.hand.concealed_tiles[-1], is_tsumo=True
                 ):
                     actions.append("tsumo")
+                if self.can_call_closed_kan(player_index) or self.can_upgrade_pon_to_kan(
+                    player_index
+                ):
+                    actions.append("kan")
                 if self._can_declare_riichi(player_index):
                     actions.append("riichi")
             elif hand_size == 13:
@@ -216,7 +222,11 @@ class MahjongEngine:
                 result = self._execute_pon(player_index)
 
             elif action == "kan":
-                result = self._execute_kan(player_index)
+                tile_str = kwargs.get("tile")
+                if self.last_discard:
+                    result = self._execute_kan(player_index)
+                else:
+                    result = self._execute_closed_or_added_kan(player_index, tile_str)
 
             elif action == "pass":
                 result = {"success": True, "message": "Passed"}
@@ -448,6 +458,44 @@ class MahjongEngine:
             player.draw_tile(replacement_tile)
 
         return {"success": True, "message": f"{player.name} called kan"}
+
+    def _execute_closed_or_added_kan(
+        self, player_index: int, tile_str: Optional[str]
+    ) -> Dict[str, Any]:
+        """Execute closed or added kan on the current player's turn"""
+        if player_index != self.current_player:
+            return {"success": False, "message": "Not your turn"}
+
+        if not tile_str:
+            return {"success": False, "message": "Tile required for kan"}
+
+        player = self.players[player_index]
+
+        target_tile = None
+        for tile in player.hand.concealed_tiles:
+            if str(tile) == tile_str:
+                target_tile = tile
+                break
+
+        if not target_tile:
+            return {"success": False, "message": "Tile not found in hand"}
+
+        if player.can_upgrade_pon_to_kan(target_tile):
+            player.upgrade_pon_to_kan(target_tile)
+        elif player.hand.concealed_tiles.count(target_tile) >= 4:
+            player.call_kan(target_tile)
+        else:
+            return {"success": False, "message": "Cannot declare kan"}
+
+        # Add new dora indicator
+        self.wall.add_dora_indicator()
+
+        # Player draws replacement tile
+        if self.wall.tiles_remaining() > 0:
+            replacement_tile = self.wall.draw_tile()
+            player.draw_tile(replacement_tile)
+
+        return {"success": True, "message": f"{player.name} declared kan"}
 
     def _can_declare_riichi(self, player_index: int) -> bool:
         """Check if player can declare riichi"""

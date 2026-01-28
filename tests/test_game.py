@@ -250,6 +250,76 @@ class TestMahjongEngine:
         dora_tiles = wall.get_dora_tiles()
         assert len(dora_tiles) >= 1
 
+    def test_closed_kan_action(self):
+        """Test closed kan declaration"""
+        players = ["Alice", "Bob", "Charlie", "David"]
+        game = MahjongEngine(players)
+
+        player = game.players[0]
+        game.current_player = 0
+        game.last_discard = None
+
+        kan_tile = Tile(Suit.SOUZU, 1)
+        player.hand.concealed_tiles = [
+            kan_tile,
+            kan_tile,
+            kan_tile,
+            kan_tile,
+            Tile(Suit.PINZU, 2),
+            Tile(Suit.PINZU, 3),
+            Tile(Suit.PINZU, 4),
+            Tile(Suit.MANZU, 2),
+            Tile(Suit.MANZU, 3),
+            Tile(Suit.MANZU, 4),
+            Tile(Suit.SOUZU, 5),
+            Tile(Suit.SOUZU, 6),
+            Tile(Suit.WIND, wind=Wind.EAST),
+            Tile(Suit.WIND, wind=Wind.EAST),
+        ]
+
+        actions = game.get_valid_actions(0)
+        assert "kan" in actions
+
+        result = game.execute_action(0, "kan", tile=str(kan_tile))
+        assert result["success"]
+        assert any(meld.is_kan() for meld in player.hand.melds)
+
+    def test_upgrade_pon_to_kan(self):
+        """Test upgrading an open pon to a kan"""
+        players = ["Alice", "Bob", "Charlie", "David"]
+        game = MahjongEngine(players)
+
+        player = game.players[0]
+        game.current_player = 0
+        game.last_discard = None
+
+        pon_tile = Tile(Suit.MANZU, 3)
+        player.hand.concealed_tiles = [
+            pon_tile,
+            pon_tile,
+            pon_tile,
+            Tile(Suit.PINZU, 2),
+            Tile(Suit.PINZU, 3),
+            Tile(Suit.PINZU, 4),
+            Tile(Suit.SOUZU, 2),
+            Tile(Suit.SOUZU, 3),
+            Tile(Suit.SOUZU, 4),
+            Tile(Suit.MANZU, 5),
+            Tile(Suit.MANZU, 6),
+            Tile(Suit.WIND, wind=Wind.EAST),
+            Tile(Suit.WIND, wind=Wind.SOUTH),
+            Tile(Suit.WIND, wind=Wind.WEST),
+        ]
+
+        player.call_pon(pon_tile, called_from=1)
+
+        actions = game.get_valid_actions(0)
+        assert "kan" in actions
+
+        result = game.execute_action(0, "kan", tile=str(pon_tile))
+        assert result["success"]
+        assert any(meld.is_kan() for meld in player.hand.melds)
+
 
 if __name__ == "__main__":
     pytest.main([__file__])
