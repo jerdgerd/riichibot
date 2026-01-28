@@ -127,7 +127,9 @@ class MahjongEngine:
 
             if hand_size == 14:
                 actions.append("discard")
-                if player.can_tsumo():
+                if player.can_tsumo() and self._has_yaku_for_win(
+                    player, player.hand.concealed_tiles[-1], is_tsumo=True
+                ):
                     actions.append("tsumo")
                 if self._can_declare_riichi(player_index):
                     actions.append("riichi")
@@ -139,7 +141,9 @@ class MahjongEngine:
                     player.draw_tile(tile)
                     # Now they should be able to discard
                     actions.append("discard")
-                    if player.can_tsumo():
+                    if player.can_tsumo() and self._has_yaku_for_win(
+                        player, player.hand.concealed_tiles[-1], is_tsumo=True
+                    ):
                         actions.append("tsumo")
                     if self._can_declare_riichi(player_index):
                         actions.append("riichi")
@@ -149,7 +153,9 @@ class MahjongEngine:
         else:
             # Other players can call discards
             if self.last_discard:
-                if player.can_call_ron(self.last_discard):
+                if player.can_call_ron(self.last_discard) and self._has_yaku_for_win(
+                    player, self.last_discard, is_tsumo=False
+                ):
                     actions.append("ron")
                 if player.can_call_pon(self.last_discard):
                     actions.append("pon")
@@ -164,6 +170,22 @@ class MahjongEngine:
                 actions.append("pass")
 
         return actions
+
+    def _has_yaku_for_win(
+        self, player: Player, winning_tile: Tile, is_tsumo: bool
+    ) -> bool:
+        """Check if a win has at least one non-dora yaku"""
+        yaku_list = YakuChecker.check_all_yaku(
+            player.hand,
+            winning_tile,
+            is_tsumo,
+            player.seat_wind,
+            self.round_wind,
+            self.wall.get_dora_tiles(),
+            self.wall.get_ura_dora_tiles() if player.hand.is_riichi else None,
+        )
+
+        return any(yaku.name != "Dora" for yaku in yaku_list)
 
     def execute_action(
         self, player_index: int, action: str, **kwargs
@@ -259,6 +281,9 @@ class MahjongEngine:
             self.wall.get_ura_dora_tiles() if player.hand.is_riichi else None,
         )
 
+        if not any(yaku.name != "Dora" for yaku in yaku_list):
+            return {"success": False, "message": "No yaku - cannot win"}
+
         score, payments = Scoring.calculate_score(yaku_list, player.is_dealer, True)
 
         # Apply payments
@@ -292,6 +317,9 @@ class MahjongEngine:
             self.wall.get_dora_tiles(),
             self.wall.get_ura_dora_tiles() if player.hand.is_riichi else None,
         )
+
+        if not any(yaku.name != "Dora" for yaku in yaku_list):
+            return {"success": False, "message": "No yaku - cannot win"}
 
         score, payments = Scoring.calculate_score(yaku_list, player.is_dealer, False)
 
