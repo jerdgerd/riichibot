@@ -234,6 +234,54 @@ class TestMahjongEngine:
         assert score > 0
         assert "dealer" in payments or "non_dealer" in payments
 
+    def test_pinfu_ryanmen_wait(self):
+        """Test pinfu requires a two-sided wait"""
+        from src.game.rules import YakuChecker
+
+        hand = Hand()
+        hand.concealed_tiles = [
+            Tile(Suit.SOUZU, 3),
+            Tile(Suit.SOUZU, 4),
+            Tile(Suit.PINZU, 3),
+            Tile(Suit.PINZU, 4),
+            Tile(Suit.PINZU, 5),
+            Tile(Suit.MANZU, 4),
+            Tile(Suit.MANZU, 5),
+            Tile(Suit.MANZU, 6),
+            Tile(Suit.SOUZU, 6),
+            Tile(Suit.SOUZU, 7),
+            Tile(Suit.SOUZU, 8),
+            Tile(Suit.PINZU, 9),
+            Tile(Suit.PINZU, 9),
+        ]
+        winning_tile = Tile(Suit.SOUZU, 2)
+
+        assert YakuChecker._check_pinfu(hand, winning_tile, Wind.EAST, Wind.EAST)
+
+    def test_pinfu_edge_wait_rejected(self):
+        """Test pinfu rejects edge waits"""
+        from src.game.rules import YakuChecker
+
+        hand = Hand()
+        hand.concealed_tiles = [
+            Tile(Suit.SOUZU, 1),
+            Tile(Suit.SOUZU, 2),
+            Tile(Suit.PINZU, 3),
+            Tile(Suit.PINZU, 4),
+            Tile(Suit.PINZU, 5),
+            Tile(Suit.MANZU, 4),
+            Tile(Suit.MANZU, 5),
+            Tile(Suit.MANZU, 6),
+            Tile(Suit.SOUZU, 6),
+            Tile(Suit.SOUZU, 7),
+            Tile(Suit.SOUZU, 8),
+            Tile(Suit.PINZU, 9),
+            Tile(Suit.PINZU, 9),
+        ]
+        winning_tile = Tile(Suit.SOUZU, 3)
+
+        assert not YakuChecker._check_pinfu(hand, winning_tile, Wind.EAST, Wind.EAST)
+
     def test_riichi_prevents_added_kan(self):
         """Test riichi blocks added kan from an open pon"""
         players = ["Alice", "Bob", "Charlie", "David"]

@@ -91,35 +91,97 @@ class YakuChecker:
         if not hand.is_closed():
             return False
 
-        # Check all melds are sequences
-        for meld in hand.melds:
-            if not meld.is_sequence():
-                return False
+        tiles = hand.concealed_tiles[:]
+        if winning_tile not in tiles:
+            tiles.append(winning_tile)
 
-        # Find the pair
-        tile_counts = {}
-        for tile in hand.concealed_tiles:
-            tile_counts[tile] = tile_counts.get(tile, 0) + 1
-
-        pair_tile = None
-        for tile, count in tile_counts.items():
-            if count == 2:
-                pair_tile = tile
-                break
-
-        if not pair_tile:
+        if len(tiles) != 14:
             return False
 
-        # Check pair is not yakuhai
-        if pair_tile.is_honor():
-            if pair_tile.suit == Suit.WIND and (
-                pair_tile.wind == seat_wind or pair_tile.wind == round_wind
-            ):
-                return False
-            if pair_tile.suit == Suit.DRAGON:
-                return False
+        return YakuChecker._is_pinfu_hand(tiles, winning_tile, seat_wind, round_wind)
 
-        return True
+    @staticmethod
+    def _is_pinfu_hand(
+        tiles: List[Tile], winning_tile: Tile, seat_wind: Wind, round_wind: Wind
+    ) -> bool:
+        """Check if tiles can form pinfu with a ryanmen wait."""
+        for pair_tile in set(tiles):
+            if tiles.count(pair_tile) < 2:
+                continue
+
+            if pair_tile.is_honor():
+                if pair_tile.suit == Suit.WIND and (
+                    pair_tile.wind == seat_wind or pair_tile.wind == round_wind
+                ):
+                    continue
+                if pair_tile.suit == Suit.DRAGON:
+                    continue
+
+            remaining = tiles[:]
+            remaining.remove(pair_tile)
+            remaining.remove(pair_tile)
+
+            sequences: List[List[Tile]] = []
+            if YakuChecker._extract_sequences(remaining, sequences):
+                if YakuChecker._is_ryanmen_wait(
+                    sequences, winning_tile
+                ):
+                    return True
+
+        return False
+
+    @staticmethod
+    def _extract_sequences(tiles: List[Tile], sequences: List[List[Tile]]) -> bool:
+        """Extract sequences only from tiles, recording a valid sequence set."""
+        if not tiles:
+            return True
+
+        tiles.sort(key=lambda t: (t.suit.value, t.value or 0))
+        first_tile = tiles[0]
+
+        if first_tile.suit not in [Suit.SOUZU, Suit.PINZU, Suit.MANZU]:
+            return False
+
+        if first_tile.value is None or first_tile.value > 7:
+            return False
+
+        tile2 = Tile(first_tile.suit, first_tile.value + 1)
+        tile3 = Tile(first_tile.suit, first_tile.value + 2)
+
+        if tile2 in tiles and tile3 in tiles:
+            tiles_copy = tiles[:]
+            tiles_copy.remove(first_tile)
+            tiles_copy.remove(tile2)
+            tiles_copy.remove(tile3)
+            sequences.append([first_tile, tile2, tile3])
+            if YakuChecker._extract_sequences(tiles_copy, sequences):
+                return True
+            sequences.pop()
+
+        return False
+
+    @staticmethod
+    def _is_ryanmen_wait(sequences: List[List[Tile]], winning_tile: Tile) -> bool:
+        """Check if the winning tile completes a two-sided wait."""
+        for sequence in sequences:
+            if winning_tile not in sequence:
+                continue
+
+            seq = sorted(sequence, key=lambda t: t.value or 0)
+            if winning_tile == seq[1]:
+                return False  # middle tile -> kanchan wait
+
+            low = seq[0].value
+            high = seq[2].value
+            if winning_tile == seq[2] and low == 1:
+                return False  # 1-2-3 won on 3 -> edge wait
+            if winning_tile == seq[0] and high == 9:
+                return False  # 7-8-9 won on 7 -> edge wait
+
+            return True
+
+        return False
+
 
     @staticmethod
     def _check_yakuhai(hand: Hand, seat_wind: Wind, round_wind: Wind) -> int:
