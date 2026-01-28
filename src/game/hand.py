@@ -86,6 +86,20 @@ class Hand:
 
         return winning_tiles
 
+    def get_winning_tiles_with_fixed_melds(
+        self, concealed_tiles: List[Tile], fixed_melds: int
+    ) -> Set[Tile]:
+        """Get winning tiles for a hand with fixed melds (e.g., after kan)."""
+        winning_tiles = set()
+        all_possible_tiles = self._get_all_possible_tiles()
+
+        for tile in all_possible_tiles:
+            test_tiles = concealed_tiles + [tile]
+            if self._is_complete_standard_hand(test_tiles, fixed_melds):
+                winning_tiles.add(tile)
+
+        return winning_tiles
+
     def _get_all_possible_tiles(self) -> List[Tile]:
         """Get all possible tiles in the game"""
         tiles = []
@@ -107,25 +121,37 @@ class Hand:
         if len(tiles) != 14:
             return False
 
+        if self._is_complete_standard_hand(tiles, fixed_melds=0):
+            return True
+
+        return False
+
+    def _is_complete_standard_hand(self, tiles: List[Tile], fixed_melds: int) -> bool:
+        """Check if tiles form a standard hand with fixed melds."""
+        melds_needed = 4 - fixed_melds
+        if melds_needed < 0:
+            return False
+
+        if len(tiles) != 2 + melds_needed * 3:
+            return False
+
         # Try to find a pair and remove it
-        for i, tile in enumerate(tiles):
-            remaining = tiles[:]
-            if remaining.count(tile) >= 2:
-                # Remove pair
+        for tile in set(tiles):
+            if tiles.count(tile) >= 2:
+                remaining = tiles[:]
                 remaining.remove(tile)
                 remaining.remove(tile)
 
-                # Check if remaining 12 tiles can form 4 melds
-                if self._can_form_melds(remaining):
+                if self._can_form_melds(remaining, melds_needed):
                     return True
 
         return False
 
-    def _can_form_melds(self, tiles: List[Tile]) -> bool:
-        """Check if tiles can form exactly 4 melds (triplets/sequences)"""
-        if len(tiles) == 0:
-            return True
-        if len(tiles) % 3 != 0:
+    def _can_form_melds(self, tiles: List[Tile], melds_needed: int) -> bool:
+        """Check if tiles can form the remaining melds (triplets/sequences)."""
+        if melds_needed == 0:
+            return len(tiles) == 0
+        if len(tiles) != melds_needed * 3:
             return False
 
         tiles_copy = tiles[:]
@@ -137,7 +163,8 @@ class Hand:
             # Remove triplet
             for _ in range(3):
                 tiles_copy.remove(first_tile)
-            return self._can_form_melds(tiles_copy)
+            if self._can_form_melds(tiles_copy, melds_needed - 1):
+                return True
 
         # Try to form sequence (only for number tiles)
         if (
@@ -152,9 +179,11 @@ class Hand:
                 tiles_copy.remove(first_tile)
                 tiles_copy.remove(tile2)
                 tiles_copy.remove(tile3)
-                return self._can_form_melds(tiles_copy)
+                if self._can_form_melds(tiles_copy, melds_needed - 1):
+                    return True
 
         return False
+
 
     def check_furiten(self, all_discards: List[List[Tile]]) -> bool:
         """Check if player is in furiten state"""

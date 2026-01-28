@@ -481,8 +481,12 @@ class MahjongEngine:
             return {"success": False, "message": "Tile not found in hand"}
 
         if player.can_upgrade_pon_to_kan(target_tile):
+            if not self._riichi_kan_allowed(player, target_tile):
+                return {"success": False, "message": "Riichi kan restriction"}
             player.upgrade_pon_to_kan(target_tile)
         elif player.hand.concealed_tiles.count(target_tile) >= 4:
+            if not self._riichi_kan_allowed(player, target_tile):
+                return {"success": False, "message": "Riichi kan restriction"}
             player.call_kan(target_tile)
         else:
             return {"success": False, "message": "Cannot declare kan"}
@@ -691,13 +695,16 @@ class MahjongEngine:
         # Find tiles with 4 copies
         for tile, count in tile_counts.items():
             if count == 4:
-                kan_tiles.append(str(tile))
+                if self._riichi_kan_allowed(player, tile):
+                    kan_tiles.append(str(tile))
 
         return kan_tiles
 
     def can_upgrade_pon_to_kan(self, player_index: int) -> List[str]:
         """Get pon melds that can be upgraded to kan"""
         player = self.players[player_index]
+        if player.hand.is_riichi:
+            return []
         upgradeable = []
 
         for meld in player.hand.melds:
@@ -708,6 +715,28 @@ class MahjongEngine:
                     upgradeable.append(str(meld_tile))
 
         return upgradeable
+
+    def _riichi_kan_allowed(self, player: Player, kan_tile: Tile) -> bool:
+        """Check riichi kan restrictions (wait must not change)."""
+        if not player.hand.is_riichi:
+            return True
+
+        if player.hand.concealed_tiles.count(kan_tile) < 4:
+            return False
+
+        before_waits = player.hand.get_winning_tiles_with_fixed_melds(
+            player.hand.concealed_tiles, fixed_melds=len(player.hand.melds)
+        )
+
+        after_tiles = player.hand.concealed_tiles[:]
+        for _ in range(4):
+            after_tiles.remove(kan_tile)
+
+        after_waits = player.hand.get_winning_tiles_with_fixed_melds(
+            after_tiles, fixed_melds=len(player.hand.melds) + 1
+        )
+
+        return before_waits == after_waits
 
     def execute_closed_kan(self, player_index: int, tile_str: str) -> Dict[str, Any]:
         """Execute closed kan declaration"""

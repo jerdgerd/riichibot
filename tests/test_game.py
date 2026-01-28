@@ -234,6 +234,36 @@ class TestMahjongEngine:
         assert score > 0
         assert "dealer" in payments or "non_dealer" in payments
 
+    def test_riichi_prevents_added_kan(self):
+        """Test riichi blocks added kan from an open pon"""
+        players = ["Alice", "Bob", "Charlie", "David"]
+        game = MahjongEngine(players)
+
+        player = game.players[0]
+        player.hand.is_riichi = True
+
+        pon_tile = Tile(Suit.MANZU, 3)
+        player.hand.concealed_tiles = [
+            pon_tile,
+            Tile(Suit.PINZU, 2),
+            Tile(Suit.PINZU, 3),
+            Tile(Suit.PINZU, 4),
+            Tile(Suit.SOUZU, 2),
+            Tile(Suit.SOUZU, 3),
+            Tile(Suit.SOUZU, 4),
+            Tile(Suit.MANZU, 5),
+            Tile(Suit.MANZU, 6),
+            Tile(Suit.WIND, wind=Wind.EAST),
+            Tile(Suit.WIND, wind=Wind.SOUTH),
+            Tile(Suit.WIND, wind=Wind.WEST),
+            Tile(Suit.WIND, wind=Wind.NORTH),
+            Tile(Suit.DRAGON, dragon=Dragon.WHITE),
+        ]
+
+        player.call_pon(pon_tile, called_from=1)
+
+        assert game.can_upgrade_pon_to_kan(0) == []
+
     def test_wall_management(self):
         """Test wall tile management"""
         from src.tiles.wall import Wall
