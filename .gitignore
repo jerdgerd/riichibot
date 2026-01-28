@@ -44,3 +44,5 @@ coverage.xml
 .hypothesis/
 models/*
 logs/*
+.todo-list.md
+AGENT.md
