@@ -294,7 +294,15 @@ class MahjongEngine:
         if not any(yaku.name != "Dora" for yaku in yaku_list):
             return {"success": False, "message": "No yaku - cannot win"}
 
-        score, payments = Scoring.calculate_score(yaku_list, player.is_dealer, True)
+        score, payments = Scoring.calculate_score(
+            yaku_list,
+            player.is_dealer,
+            True,
+            hand=player.hand,
+            winning_tile=winning_tile,
+            seat_wind=player.seat_wind,
+            round_wind=self.round_wind,
+        )
 
         # Apply payments
         self._apply_tsumo_payments(player_index, score, payments)
@@ -331,7 +339,15 @@ class MahjongEngine:
         if not any(yaku.name != "Dora" for yaku in yaku_list):
             return {"success": False, "message": "No yaku - cannot win"}
 
-        score, payments = Scoring.calculate_score(yaku_list, player.is_dealer, False)
+        score, payments = Scoring.calculate_score(
+            yaku_list,
+            player.is_dealer,
+            False,
+            hand=player.hand,
+            winning_tile=self.last_discard,
+            seat_wind=player.seat_wind,
+            round_wind=self.round_wind,
+        )
 
         # Apply payments
         discarder = self.players[self.last_discard_player]

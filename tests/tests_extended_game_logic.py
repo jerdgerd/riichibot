@@ -33,7 +33,7 @@ def stub_scoring(monkeypatch):
     )
     monkeypatch.setattr(
         "src.game.scoring.Scoring.calculate_score",
-        lambda yaku_list, is_dealer, is_tsumo: (
+        lambda *args, **kwargs: (
             1000,
             {"all": 333, "dealer": 500, "non_dealer": 250, "discarder": 1000},
         ),

@@ -1,26 +1,25 @@
 """
-Extra edge-cases for Scoring – exhaustive on low/hi han values.
+Extra edge-cases for Scoring base points and limit hands.
 """
 
 import pytest
 
-from src.game.rules import Yaku
 from src.game.scoring import Scoring
 
 
 @pytest.mark.parametrize(
-    "han,expected",
+    "fu,han,expected",
     [
-        (1, 1000),
-        (2, 2000),
-        (3, 3900),
-        (4, 7700),
-        (5, 8000),
-        (6, 12000),
-        (11, 24000),
-        (13, 32000),
+        (30, 1, 240),
+        (30, 4, 1920),
+        (40, 4, 2000),  # base exceeds mangan threshold
+        (30, 5, 2000),
+        (30, 6, 3000),
+        (30, 8, 4000),
+        (30, 11, 6000),
+        (30, 13, 8000),
     ],
 )
-def test_base_point_table(han, expected):
-    pts = Scoring._get_base_points(han)
+def test_base_point_table(fu, han, expected):
+    pts = Scoring._calculate_base_points(fu, han)
     assert pts == expected
