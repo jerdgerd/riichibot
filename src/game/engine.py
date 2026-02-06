@@ -125,9 +125,10 @@ class MahjongEngine:
 
         if self.current_player == player_index:
             # Current player's turn
-            hand_size = len(player.hand.concealed_tiles)
+            meld_tile_count = sum(len(meld.tiles) for meld in player.hand.melds)
+            total_tiles = len(player.hand.concealed_tiles) + meld_tile_count
 
-            if hand_size == 14:
+            if total_tiles == 14:
                 actions.append("discard")
                 if player.can_tsumo() and self._has_yaku_for_win(
                     player, player.hand.concealed_tiles[-1], is_tsumo=True
@@ -139,7 +140,7 @@ class MahjongEngine:
                     actions.append("kan")
                 if self._can_declare_riichi(player_index):
                     actions.append("riichi")
-            elif hand_size == 13:
+            elif total_tiles == 13:
                 # Player needs to draw first - this shouldn't happen in normal flow
                 # Force a tile draw if wall has tiles
                 if self.wall.tiles_remaining() > 0:

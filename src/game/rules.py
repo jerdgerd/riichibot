@@ -48,14 +48,14 @@ class YakuChecker:
         if YakuChecker._check_kokushi(hand, winning_tile):
             yaku_list.append(Yaku("Kokushi Musou", 13, closed_only=True))
 
-        yakuhai_count = YakuChecker._check_yakuhai(hand, seat_wind, round_wind)
+        yakuhai_count = YakuChecker._check_yakuhai(hand, seat_wind, round_wind, winning_tile)
         for _ in range(yakuhai_count):
             yaku_list.append(Yaku("Yakuhai", 1))
 
-        if YakuChecker._check_iipeikou(hand):
+        if YakuChecker._check_iipeikou(hand, winning_tile):
             yaku_list.append(Yaku("Iipeikou", 1, closed_only=True))
 
-        if YakuChecker._check_toitoi(hand):
+        if YakuChecker._check_toitoi(hand, winning_tile):
             yaku_list.append(Yaku("Toitoi", 2))
 
         if YakuChecker._check_honitsu(all_tiles):
@@ -65,6 +65,54 @@ class YakuChecker:
         if YakuChecker._check_chinitsu(all_tiles):
             han = 6 if hand.is_closed() else 5
             yaku_list.append(Yaku("Chinitsu", han))
+
+        if YakuChecker._check_sanshoku_doujun(hand, winning_tile):
+            yaku_list.append(Yaku("Sanshoku Doujun", 2 if hand.is_closed() else 1))
+
+        if YakuChecker._check_ittsu(hand, winning_tile):
+            yaku_list.append(Yaku("Ittsu", 2 if hand.is_closed() else 1))
+
+        if YakuChecker._check_sanankou(hand, winning_tile, is_tsumo):
+            yaku_list.append(Yaku("Sanankou", 2))
+
+        if YakuChecker._check_chanta(hand, winning_tile):
+            yaku_list.append(Yaku("Chanta", 2 if hand.is_closed() else 1))
+
+        if YakuChecker._check_junchan(hand, winning_tile):
+            yaku_list.append(Yaku("Junchan", 3 if hand.is_closed() else 2))
+
+        if YakuChecker._check_honroutou(hand, winning_tile):
+            yaku_list.append(Yaku("Honroutou", 2))
+
+        if YakuChecker._check_shousangen(hand, winning_tile):
+            yaku_list.append(Yaku("Shousangen", 2))
+
+        if YakuChecker._check_daisangen(hand, winning_tile):
+            yaku_list.append(Yaku("Daisangen", 13))
+
+        if YakuChecker._check_suuankou(hand, winning_tile, is_tsumo):
+            yaku_list.append(Yaku("Suuankou", 13, closed_only=True))
+
+        if YakuChecker._check_suukantsu(hand):
+            yaku_list.append(Yaku("Suukantsu", 13))
+
+        if YakuChecker._check_tsuuiisou(hand, winning_tile):
+            yaku_list.append(Yaku("Tsuuiisou", 13))
+
+        if YakuChecker._check_chinroutou(hand, winning_tile):
+            yaku_list.append(Yaku("Chinroutou", 13))
+
+        if YakuChecker._check_ryuuiisou(hand, winning_tile):
+            yaku_list.append(Yaku("Ryuuiisou", 13))
+
+        if YakuChecker._check_chuuren_poutou(hand, winning_tile):
+            yaku_list.append(Yaku("Chuuren Poutou", 13, closed_only=True))
+
+        if YakuChecker._check_shousuushii(hand, winning_tile):
+            yaku_list.append(Yaku("Shousuushii", 13))
+
+        if YakuChecker._check_daisuushii(hand, winning_tile):
+            yaku_list.append(Yaku("Daisuushii", 13))
 
         # Add dora
         dora_count = YakuChecker._count_dora(all_tiles, dora_tiles)
@@ -195,7 +243,7 @@ class YakuChecker:
             return False
 
         tiles = hand.concealed_tiles[:]
-        if winning_tile not in tiles:
+        if len(tiles) == 13:
             tiles.append(winning_tile)
 
         if len(tiles) != 14:
@@ -211,7 +259,7 @@ class YakuChecker:
             return False
 
         tiles = hand.concealed_tiles[:]
-        if winning_tile not in tiles:
+        if len(tiles) == 13:
             tiles.append(winning_tile)
 
         if len(tiles) != 14:
@@ -240,43 +288,51 @@ class YakuChecker:
 
 
     @staticmethod
-    def _check_yakuhai(hand: Hand, seat_wind: Wind, round_wind: Wind) -> int:
+    def _check_yakuhai(
+        hand: Hand, seat_wind: Wind, round_wind: Wind, winning_tile: Tile
+    ) -> int:
         """Count yakuhai triplets"""
-        count = 0
-        for meld in hand.melds:
-            if meld.is_triplet() or meld.is_kan():
-                tile = meld.tiles[0]
-                if tile.suit == Suit.DRAGON:
+        def is_value_tile(tile: Tile) -> bool:
+            if tile.suit == Suit.DRAGON:
+                return True
+            if tile.suit == Suit.WIND and (tile.wind == seat_wind or tile.wind == round_wind):
+                return True
+            return False
+        max_count = 0
+        for melds, _ in YakuChecker._standard_decompositions(hand, winning_tile):
+            count = 0
+            for meld in melds:
+                if YakuChecker._is_triplet_meld(meld) and is_value_tile(meld[0]):
                     count += 1
-                elif tile.suit == Suit.WIND and (
-                    tile.wind == seat_wind or tile.wind == round_wind
-                ):
-                    count += 1
-        return count
+            max_count = max(max_count, count)
+        return max_count
 
     @staticmethod
-    def _check_iipeikou(hand: Hand) -> bool:
+    def _check_iipeikou(hand: Hand, winning_tile: Tile) -> bool:
         """Same sequence twice, closed hand only"""
         if not hand.is_closed():
             return False
 
-        sequences = [meld for meld in hand.melds if meld.is_sequence()]
-        if len(sequences) < 2:
-            return False
-
-        for i, seq1 in enumerate(sequences):
-            for seq2 in sequences[i + 1 :]:
-                if sorted(seq1.tiles) == sorted(seq2.tiles):
-                    return True
+        for melds, _ in YakuChecker._standard_decompositions(hand, winning_tile):
+            sequences = [meld for meld in melds if YakuChecker._is_sequence_meld(meld)]
+            for i, seq1 in enumerate(sequences):
+                for seq2 in sequences[i + 1 :]:
+                    if sorted(seq1, key=lambda t: (t.suit.value, t.value or 0)) == sorted(
+                        seq2, key=lambda t: (t.suit.value, t.value or 0)
+                    ):
+                        return True
         return False
 
     @staticmethod
-    def _check_toitoi(hand: Hand) -> bool:
+    def _check_toitoi(hand: Hand, winning_tile: Tile) -> bool:
         """All triplets plus a pair"""
-        for meld in hand.melds:
-            if not (meld.is_triplet() or meld.is_kan()):
-                return False
-        return True
+        for melds, _ in YakuChecker._standard_decompositions(hand, winning_tile):
+            if all(
+                YakuChecker._is_triplet_meld(meld)
+                for meld in melds
+            ):
+                return True
+        return False
 
     @staticmethod
     def _check_honitsu(tiles: List[Tile]) -> bool:
@@ -314,3 +370,296 @@ class YakuChecker:
             if tile.is_red:  # Red fives are always dora
                 count += 1
         return count
+
+    @staticmethod
+    def _complete_hand_tiles(hand: Hand, winning_tile: Tile) -> List[Tile]:
+        tiles = hand.get_all_tiles()
+        if len(tiles) == 13:
+            tiles = tiles[:] + [winning_tile]
+        return tiles
+
+    @staticmethod
+    def _standard_decompositions(
+        hand: Hand, winning_tile: Tile
+    ) -> List[tuple[list[list[Tile]], Tile]]:
+        fixed_melds = [meld.tiles[:] for meld in hand.melds]
+        melds_needed = 4 - len(fixed_melds)
+        concealed = hand.concealed_tiles[:]
+        required_len = 2 + melds_needed * 3
+        if len(concealed) == required_len - 1:
+            concealed.append(winning_tile)
+        if melds_needed < 0:
+            return []
+        if len(concealed) != 2 + melds_needed * 3:
+            return []
+
+        results: List[tuple[list[list[Tile]], Tile]] = []
+        for pair_tile in set(concealed):
+            if concealed.count(pair_tile) < 2:
+                continue
+            remaining = concealed[:]
+            remaining.remove(pair_tile)
+            remaining.remove(pair_tile)
+            for melds in YakuChecker._extract_melds(remaining):
+                if len(melds) != melds_needed:
+                    continue
+                results.append((fixed_melds + melds, pair_tile))
+        return results
+
+    @staticmethod
+    def _extract_melds(tiles: List[Tile]) -> List[List[List[Tile]]]:
+        if not tiles:
+            return [[]]
+
+        tiles_sorted = sorted(tiles, key=lambda t: (t.suit.value, t.value or 0))
+        first = tiles_sorted[0]
+        results: List[List[List[Tile]]] = []
+
+        if tiles_sorted.count(first) >= 3:
+            remaining = tiles_sorted[:]
+            for _ in range(3):
+                remaining.remove(first)
+            for melds in YakuChecker._extract_melds(remaining):
+                results.append([[first, first, first]] + melds)
+
+        if first.suit in [Suit.SOUZU, Suit.PINZU, Suit.MANZU] and first.value and first.value <= 7:
+            tile2 = Tile(first.suit, first.value + 1)
+            tile3 = Tile(first.suit, first.value + 2)
+            if tile2 in tiles_sorted and tile3 in tiles_sorted:
+                remaining = tiles_sorted[:]
+                remaining.remove(first)
+                remaining.remove(tile2)
+                remaining.remove(tile3)
+                for melds in YakuChecker._extract_melds(remaining):
+                    results.append([[first, tile2, tile3]] + melds)
+
+        return results
+
+    @staticmethod
+    def _is_triplet_meld(meld: List[Tile]) -> bool:
+        if len(meld) not in (3, 4):
+            return False
+        return all(tile == meld[0] for tile in meld)
+
+    @staticmethod
+    def _is_sequence_meld(meld: List[Tile]) -> bool:
+        if len(meld) != 3:
+            return False
+        if meld[0].suit not in [Suit.SOUZU, Suit.PINZU, Suit.MANZU]:
+            return False
+        seq = sorted(meld, key=lambda t: t.value or 0)
+        return (
+            seq[0].value is not None
+            and seq[1].value == seq[0].value + 1
+            and seq[2].value == seq[0].value + 2
+        )
+
+    @staticmethod
+    def _check_sanshoku_doujun(hand: Hand, winning_tile: Tile) -> bool:
+        for melds, _ in YakuChecker._standard_decompositions(hand, winning_tile):
+            sequences = [
+                meld
+                for meld in melds
+                if YakuChecker._is_sequence_meld(meld)
+            ]
+            for start in range(1, 8):
+                suits = set()
+                for meld in sequences:
+                    seq = sorted(meld, key=lambda t: t.value or 0)
+                    if seq[0].value == start:
+                        suits.add(seq[0].suit)
+                if len(suits) == 3:
+                    return True
+        return False
+
+    @staticmethod
+    def _check_ittsu(hand: Hand, winning_tile: Tile) -> bool:
+        for melds, _ in YakuChecker._standard_decompositions(hand, winning_tile):
+            sequences = [
+                meld
+                for meld in melds
+                if YakuChecker._is_sequence_meld(meld)
+            ]
+            for suit in [Suit.SOUZU, Suit.PINZU, Suit.MANZU]:
+                starts = {
+                    sorted(meld, key=lambda t: t.value or 0)[0].value
+                    for meld in sequences
+                    if meld[0].suit == suit
+                }
+                if {1, 4, 7}.issubset(starts):
+                    return True
+        return False
+
+    @staticmethod
+    def _check_sanankou(hand: Hand, winning_tile: Tile, is_tsumo: bool) -> bool:
+        for melds, _ in YakuChecker._standard_decompositions(hand, winning_tile):
+            concealed_triplets = 0
+            for meld in melds:
+                if YakuChecker._is_triplet_meld(meld) and len(meld) == 3:
+                    if not is_tsumo and winning_tile in meld:
+                        continue
+                    concealed_triplets += 1
+                if YakuChecker._is_triplet_meld(meld) and len(meld) == 4:
+                    concealed_triplets += 1
+            if concealed_triplets >= 3:
+                return True
+        return False
+
+    @staticmethod
+    def _check_chanta(hand: Hand, winning_tile: Tile) -> bool:
+        for melds, pair_tile in YakuChecker._standard_decompositions(hand, winning_tile):
+            if not (pair_tile.is_terminal_or_honor()):
+                continue
+            has_sequence = False
+            valid = True
+            for meld in melds:
+                if not any(tile.is_terminal_or_honor() for tile in meld):
+                    valid = False
+                    break
+                if YakuChecker._is_sequence_meld(meld):
+                    has_sequence = True
+            if valid and has_sequence:
+                return True
+        return False
+
+    @staticmethod
+    def _check_junchan(hand: Hand, winning_tile: Tile) -> bool:
+        for melds, pair_tile in YakuChecker._standard_decompositions(hand, winning_tile):
+            if pair_tile.is_honor() or not pair_tile.is_terminal():
+                continue
+            has_sequence = False
+            valid = True
+            for meld in melds:
+                if any(tile.is_honor() for tile in meld):
+                    valid = False
+                    break
+                if not any(tile.is_terminal() for tile in meld):
+                    valid = False
+                    break
+                if YakuChecker._is_sequence_meld(meld):
+                    has_sequence = True
+            if valid and has_sequence:
+                return True
+        return False
+
+    @staticmethod
+    def _check_honroutou(hand: Hand, winning_tile: Tile) -> bool:
+        tiles = YakuChecker._complete_hand_tiles(hand, winning_tile)
+        if not all(tile.is_terminal_or_honor() for tile in tiles):
+            return False
+        for melds, _ in YakuChecker._standard_decompositions(hand, winning_tile):
+            if all(YakuChecker._is_triplet_meld(meld) and len(meld) == 3 for meld in melds):
+                return True
+        return False
+
+    @staticmethod
+    def _check_shousangen(hand: Hand, winning_tile: Tile) -> bool:
+        for melds, pair_tile in YakuChecker._standard_decompositions(hand, winning_tile):
+            if pair_tile.suit != Suit.DRAGON:
+                continue
+            dragon_triplets = 0
+            for meld in melds:
+                if len(meld) >= 3 and meld[0] == meld[1] == meld[2] and meld[0].suit == Suit.DRAGON:
+                    dragon_triplets += 1
+            if dragon_triplets == 2:
+                return True
+        return False
+
+    @staticmethod
+    def _check_daisangen(hand: Hand, winning_tile: Tile) -> bool:
+        for melds, _ in YakuChecker._standard_decompositions(hand, winning_tile):
+            dragon_triplets = 0
+            for meld in melds:
+                if len(meld) >= 3 and meld[0] == meld[1] == meld[2] and meld[0].suit == Suit.DRAGON:
+                    dragon_triplets += 1
+            if dragon_triplets == 3:
+                return True
+        return False
+
+    @staticmethod
+    def _check_suuankou(hand: Hand, winning_tile: Tile, is_tsumo: bool) -> bool:
+        if not hand.is_closed():
+            return False
+        for melds, _ in YakuChecker._standard_decompositions(hand, winning_tile):
+            triplets = 0
+            for meld in melds:
+                if len(meld) == 3 and meld[0] == meld[1] == meld[2]:
+                    if not is_tsumo and winning_tile in meld:
+                        continue
+                    triplets += 1
+                if len(meld) == 4 and meld[0] == meld[1] == meld[2] == meld[3]:
+                    triplets += 1
+            if triplets == 4:
+                return True
+        return False
+
+    @staticmethod
+    def _check_suukantsu(hand: Hand) -> bool:
+        return sum(1 for meld in hand.melds if meld.is_kan()) == 4
+
+    @staticmethod
+    def _check_tsuuiisou(hand: Hand, winning_tile: Tile) -> bool:
+        tiles = YakuChecker._complete_hand_tiles(hand, winning_tile)
+        return all(tile.is_honor() for tile in tiles)
+
+    @staticmethod
+    def _check_chinroutou(hand: Hand, winning_tile: Tile) -> bool:
+        tiles = YakuChecker._complete_hand_tiles(hand, winning_tile)
+        return all(tile.is_terminal() for tile in tiles)
+
+    @staticmethod
+    def _check_ryuuiisou(hand: Hand, winning_tile: Tile) -> bool:
+        green_tiles = {
+            Tile(Suit.SOUZU, 2),
+            Tile(Suit.SOUZU, 3),
+            Tile(Suit.SOUZU, 4),
+            Tile(Suit.SOUZU, 6),
+            Tile(Suit.SOUZU, 8),
+            Tile(Suit.DRAGON, dragon=Dragon.GREEN),
+        }
+        tiles = YakuChecker._complete_hand_tiles(hand, winning_tile)
+        return all(tile in green_tiles for tile in tiles)
+
+    @staticmethod
+    def _check_chuuren_poutou(hand: Hand, winning_tile: Tile) -> bool:
+        if not hand.is_closed():
+            return False
+        tiles = YakuChecker._complete_hand_tiles(hand, winning_tile)
+        if len(tiles) != 14:
+            return False
+        if any(tile.is_honor() for tile in tiles):
+            return False
+        suits = {tile.suit for tile in tiles}
+        if len(suits) != 1:
+            return False
+        counts = {i: 0 for i in range(1, 10)}
+        for tile in tiles:
+            counts[tile.value] += 1
+        base = [1, 1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 9]
+        required = {1: 3, 9: 3, 2: 1, 3: 1, 4: 1, 5: 1, 6: 1, 7: 1, 8: 1}
+        if any(counts[num] < req for num, req in required.items()):
+            return False
+        extra = sum(counts.values()) - sum(required.values())
+        return extra == 1
+
+    @staticmethod
+    def _check_shousuushii(hand: Hand, winning_tile: Tile) -> bool:
+        for melds, pair_tile in YakuChecker._standard_decompositions(hand, winning_tile):
+            wind_triplets = 0
+            for meld in melds:
+                if len(meld) >= 3 and meld[0] == meld[1] == meld[2] and meld[0].suit == Suit.WIND:
+                    wind_triplets += 1
+            if wind_triplets == 3 and pair_tile.suit == Suit.WIND:
+                return True
+        return False
+
+    @staticmethod
+    def _check_daisuushii(hand: Hand, winning_tile: Tile) -> bool:
+        for melds, _ in YakuChecker._standard_decompositions(hand, winning_tile):
+            wind_triplets = 0
+            for meld in melds:
+                if len(meld) >= 3 and meld[0] == meld[1] == meld[2] and meld[0].suit == Suit.WIND:
+                    wind_triplets += 1
+            if wind_triplets == 4:
+                return True
+        return False

@@ -1,4 +1,4 @@
-from src.tiles.tile import Dragon, Suit, Tile, Wind
+from tiles.tile import Dragon, Suit, Tile, Wind
 
 
 def test_number_wraps_nine_to_one():

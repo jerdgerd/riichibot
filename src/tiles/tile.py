@@ -82,7 +82,7 @@ class Tile:
 
     def __eq__(self, other):
         """Check if two tiles are equal based on their properties"""
-        if not isinstance(other, Tile):
+        if not hasattr(other, "suit"):
             return False
         return (
             self.suit == other.suit
@@ -90,3 +90,6 @@ class Tile:
             and self.wind == other.wind
             and self.dragon == other.dragon
         )
+
+    def __hash__(self):
+        return hash((self.suit, self.value, self.wind, self.dragon))

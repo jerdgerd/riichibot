@@ -434,7 +434,6 @@ class TestMahjongEngine:
             Tile(Suit.MANZU, 6),
             Tile(Suit.WIND, wind=Wind.EAST),
             Tile(Suit.WIND, wind=Wind.SOUTH),
-            Tile(Suit.WIND, wind=Wind.WEST),
         ]
 
         player.call_pon(pon_tile, called_from=1)
