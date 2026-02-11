@@ -185,7 +185,7 @@ def test_engine_can_declare_riichi_positive_and_negative(monkeypatch):
 def test_engine_execute_discard_invalid_tile():
     engine = MahjongEngine(["A", "B", "C", "D"], use_red_fives=False)
     player0 = engine.players[0]
-    fake_tile_str = "9sou"  # Unlikely in opening hand of dealer
+    fake_tile_str = "not-a-tile"
 
     result = engine.execute_action(0, "discard", tile=fake_tile_str)
     assert not result["success"]

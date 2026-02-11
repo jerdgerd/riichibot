@@ -17,12 +17,12 @@ class Player:
         """Draw a tile from wall"""
         self.hand.add_tile(tile)
 
-    def discard_tile(self, tile: Tile) -> Tile:
+    def discard_tile(self, tile: Tile, *, from_riichi_declaration: bool = False) -> Tile:
         """Discard a tile"""
         if tile not in self.hand.concealed_tiles:
             raise ValueError("Cannot discard tile not in hand")
 
-        self.hand.discard_tile(tile)
+        self.hand.discard_tile(tile, from_riichi_declaration=from_riichi_declaration)
         return tile
 
     def can_call_chii(self, tile: Tile, from_left: bool) -> List[List[Tile]]:

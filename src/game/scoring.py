@@ -27,39 +27,44 @@ class Scoring:
         seat_wind: Optional[Wind] = None,
         round_wind: Optional[Wind] = None,
         fu: Optional[int] = None,
+        honba: int = 0,
     ) -> Tuple[int, Dict[str, int]]:
         """Calculate final score and payments"""
         # Calculate total han
         total_han = sum(yaku.han for yaku in yaku_list)
+        yakuman_count = Scoring._count_yakuman(yaku_list)
 
         if total_han == 0:
             raise ValueError("No yaku - cannot win")
 
-        if fu is None:
-            if hand and winning_tile and seat_wind and round_wind:
-                fu = Scoring.calculate_fu(
-                    hand=hand,
-                    winning_tile=winning_tile,
-                    is_tsumo=is_tsumo,
-                    seat_wind=seat_wind,
-                    round_wind=round_wind,
-                    yaku_list=yaku_list,
-                )
-            else:
-                fu = 30
+        if yakuman_count > 0:
+            base_points = Scoring.LIMIT_BASE_POINTS["yakuman"] * yakuman_count
+        else:
+            if fu is None:
+                if hand and winning_tile and seat_wind and round_wind:
+                    fu = Scoring.calculate_fu(
+                        hand=hand,
+                        winning_tile=winning_tile,
+                        is_tsumo=is_tsumo,
+                        seat_wind=seat_wind,
+                        round_wind=round_wind,
+                        yaku_list=yaku_list,
+                    )
+                else:
+                    fu = 30
 
-        base_points = Scoring._calculate_base_points(fu, total_han)
+            base_points = Scoring._calculate_base_points(fu, total_han)
 
         # Calculate payments
         payments = {}
         if is_tsumo:
             if is_dealer:
-                payment_per_player = Scoring._round_up_100(base_points * 2)
+                payment_per_player = Scoring._round_up_100(base_points * 2) + honba * 100
                 payments = {"all": payment_per_player}
                 final_score = payment_per_player * 3
             else:
-                dealer_payment = Scoring._round_up_100(base_points * 2)
-                non_dealer_payment = Scoring._round_up_100(base_points)
+                dealer_payment = Scoring._round_up_100(base_points * 2) + honba * 100
+                non_dealer_payment = Scoring._round_up_100(base_points) + honba * 100
                 payments = {
                     "dealer": dealer_payment,
                     "non_dealer": non_dealer_payment,
@@ -67,7 +72,7 @@ class Scoring:
                 final_score = dealer_payment + non_dealer_payment * 2
         else:
             ron_multiplier = 6 if is_dealer else 4
-            final_score = Scoring._round_up_100(base_points * ron_multiplier)
+            final_score = Scoring._round_up_100(base_points * ron_multiplier) + honba * 300
             payments = {"discarder": final_score}
 
         return final_score, payments
@@ -87,6 +92,8 @@ class Scoring:
             return 0
         if "Chiitoitsu" in yaku_names:
             return 25
+        if "Pinfu" in yaku_names and is_tsumo:
+            return 20
 
         tiles = hand.concealed_tiles[:]
         if len(tiles) == 13:
@@ -97,7 +104,7 @@ class Scoring:
             return 30
 
         base_fu = 20
-        if is_tsumo:
+        if is_tsumo and "Pinfu" not in yaku_names:
             base_fu += 2
         elif hand.is_closed():
             base_fu += 10
@@ -110,15 +117,14 @@ class Scoring:
         for melds, pair_tile in decompositions:
             fu = base_fu + open_meld_fu
             fu += Scoring._pair_fu(pair_tile, seat_wind, round_wind)
-            fu += Scoring._meld_fu_total(melds, is_open=False)
+            fu += Scoring._meld_fu_total_with_win(melds, is_tsumo, winning_tile)
 
             if "Pinfu" not in yaku_names:
                 fu += Scoring._wait_fu(pair_tile, melds, winning_tile)
 
+            fu = Scoring._round_up_10(fu)
             if fu < 30:
                 fu = 30
-
-            fu = Scoring._round_up_10(fu)
             max_fu = max(max_fu, fu)
 
         return max_fu
@@ -170,6 +176,34 @@ class Scoring:
     @staticmethod
     def _meld_fu_total(melds: List[List[Tile]], is_open: bool) -> int:
         return sum(Scoring._meld_fu(meld, is_open) for meld in melds)
+
+    @staticmethod
+    def _meld_fu_total_with_win(
+        melds: List[List[Tile]], is_tsumo: bool, winning_tile: Tile
+    ) -> int:
+        total = 0
+        for meld in melds:
+            is_open = False
+            if (
+                not is_tsumo
+                and len(meld) in (3, 4)
+                and all(tile == meld[0] for tile in meld)
+                and winning_tile in meld
+            ):
+                is_open = True
+            total += Scoring._meld_fu(meld, is_open=is_open)
+        return total
+
+    @staticmethod
+    def _count_yakuman(yaku_list: List[Yaku]) -> int:
+        """Count total yakuman multiples represented in yaku list."""
+        count = 0
+        for yaku in yaku_list:
+            if yaku.name == "Dora":
+                continue
+            if yaku.han >= 13:
+                count += max(1, yaku.han // 13)
+        return count
 
     @staticmethod
     def _pair_fu(pair_tile: Tile, seat_wind: Wind, round_wind: Wind) -> int:

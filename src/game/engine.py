@@ -47,6 +47,11 @@ class MahjongEngine:
         self.last_discard_player: Optional[int] = None
         self.riichi_bets = 0
         self.honba = 0  # Bonus counters
+        self.last_action_was_kan_draw = False
+        self.has_open_call = False
+        self.pending_chankan_tile: Optional[Tile] = None
+        self.pending_chankan_from: Optional[int] = None
+        self.pending_chankan_responders: set[int] = set()
 
         # Initialize players
         winds = [Wind.EAST, Wind.SOUTH, Wind.WEST, Wind.NORTH]
@@ -123,6 +128,9 @@ class MahjongEngine:
         player = self.players[player_index]
         actions = []
 
+        if self.pending_chankan_tile and player_index == self.pending_chankan_from:
+            return actions
+
         if self.current_player == player_index:
             # Current player's turn
             meld_tile_count = sum(len(meld.tiles) for meld in player.hand.melds)
@@ -130,8 +138,13 @@ class MahjongEngine:
 
             if total_tiles == 14:
                 actions.append("discard")
+                winning_tile = (
+                    player.hand.last_drawn_tile
+                    if player.hand.last_drawn_tile is not None
+                    else player.hand.concealed_tiles[-1]
+                )
                 if player.can_tsumo() and self._has_yaku_for_win(
-                    player, player.hand.concealed_tiles[-1], is_tsumo=True
+                    player, winning_tile, is_tsumo=True
                 ):
                     actions.append("tsumo")
                 if self.can_call_closed_kan(player_index) or self.can_upgrade_pon_to_kan(
@@ -148,8 +161,13 @@ class MahjongEngine:
                     player.draw_tile(tile)
                     # Now they should be able to discard
                     actions.append("discard")
+                    winning_tile = (
+                        player.hand.last_drawn_tile
+                        if player.hand.last_drawn_tile is not None
+                        else player.hand.concealed_tiles[-1]
+                    )
                     if player.can_tsumo() and self._has_yaku_for_win(
-                        player, player.hand.concealed_tiles[-1], is_tsumo=True
+                        player, winning_tile, is_tsumo=True
                     ):
                         actions.append("tsumo")
                     if self._can_declare_riichi(player_index):
@@ -158,6 +176,20 @@ class MahjongEngine:
                     # Wall empty, handle draw
                     pass
         else:
+            if (
+                self.pending_chankan_tile
+                and player_index in self.pending_chankan_responders
+            ):
+                if player.can_call_ron(self.pending_chankan_tile) and self._has_yaku_for_win(
+                    player,
+                    self.pending_chankan_tile,
+                    is_tsumo=False,
+                    is_chankan=True,
+                ):
+                    actions.append("ron")
+                actions.append("pass")
+                return actions
+
             # Other players can call discards
             if self.last_discard:
                 if player.can_call_ron(self.last_discard) and self._has_yaku_for_win(
@@ -179,9 +211,18 @@ class MahjongEngine:
         return actions
 
     def _has_yaku_for_win(
-        self, player: Player, winning_tile: Tile, is_tsumo: bool
+        self,
+        player: Player,
+        winning_tile: Tile,
+        is_tsumo: bool,
+        *,
+        is_chankan: bool = False,
     ) -> bool:
         """Check if a win has at least one non-dora yaku"""
+        player_index = self.players.index(player)
+        yaku_context = self._build_yaku_context(
+            player_index, is_tsumo=is_tsumo, is_chankan=is_chankan
+        )
         yaku_list = YakuChecker.check_all_yaku(
             player.hand,
             winning_tile,
@@ -190,9 +231,64 @@ class MahjongEngine:
             self.round_wind,
             self.wall.get_dora_tiles(),
             self.wall.get_ura_dora_tiles() if player.hand.is_riichi else None,
+            **yaku_context,
         )
 
         return any(yaku.name != "Dora" for yaku in yaku_list)
+
+    def _build_yaku_context(
+        self, player_index: int, *, is_tsumo: bool, is_chankan: bool = False
+    ) -> Dict[str, bool]:
+        """Build situational yaku context flags for the current win check."""
+        player = self.players[player_index]
+        no_discards_yet = all(len(p.hand.discards) == 0 for p in self.players)
+        last_tile = self.wall.tiles_remaining() == 0
+
+        return {
+            "is_ippatsu": player.hand.is_riichi and player.hand.ippatsu_eligible,
+            "is_double_riichi": player.hand.is_riichi and player.hand.riichi_turn == 0,
+            "is_rinshan": is_tsumo and self.last_action_was_kan_draw,
+            "is_chankan": is_chankan,
+            "is_haitei": is_tsumo and last_tile,
+            "is_houtei": (not is_tsumo) and last_tile,
+            "is_tenhou": (
+                is_tsumo
+                and player.is_dealer
+                and self.turn_number == 0
+                and no_discards_yet
+                and not self.has_open_call
+            ),
+            "is_chiihou": (
+                is_tsumo
+                and not player.is_dealer
+                and len(player.hand.discards) == 0
+                and self.turn_number <= 3
+                and not self.has_open_call
+            ),
+        }
+
+    def _clear_ippatsu_all(self):
+        for player in self.players:
+            player.hand.ippatsu_eligible = False
+
+    def _clear_pending_chankan(self):
+        self.pending_chankan_tile = None
+        self.pending_chankan_from = None
+        self.pending_chankan_responders = set()
+
+    def _find_chankan_responders(self, tile: Tile, kan_player: int) -> List[int]:
+        responders: List[int] = []
+        for idx, player in enumerate(self.players):
+            if idx == kan_player:
+                continue
+            if not player.can_call_ron(tile):
+                continue
+            if not self._has_yaku_for_win(
+                player, tile, is_tsumo=False, is_chankan=True
+            ):
+                continue
+            responders.append(idx)
+        return responders
 
     def execute_action(
         self, player_index: int, action: str, **kwargs
@@ -230,7 +326,7 @@ class MahjongEngine:
                     result = self._execute_closed_or_added_kan(player_index, tile_str)
 
             elif action == "pass":
-                result = {"success": True, "message": "Passed"}
+                result = self._execute_pass(player_index)
 
             else:
                 result["message"] = f"Unknown action: {action}"
@@ -265,11 +361,11 @@ class MahjongEngine:
         discarded_tile = player.discard_tile(tile_to_discard)
         self.last_discard = discarded_tile
         self.last_discard_player = player_index
+        self.last_action_was_kan_draw = False
 
         # Check furiten for all players
-        all_discards = [p.hand.discards for p in self.players]
         for p in self.players:
-            p.hand.check_furiten(all_discards)
+            p.hand.check_furiten()
 
         return {"success": True, "message": f"Discarded {discarded_tile}"}
 
@@ -281,7 +377,12 @@ class MahjongEngine:
             return {"success": False, "message": "Cannot tsumo"}
 
         # Calculate score
-        winning_tile = player.hand.concealed_tiles[-1]  # Last drawn tile
+        winning_tile = (
+            player.hand.last_drawn_tile
+            if player.hand.last_drawn_tile is not None
+            else player.hand.concealed_tiles[-1]
+        )
+        yaku_context = self._build_yaku_context(player_index, is_tsumo=True)
         yaku_list = YakuChecker.check_all_yaku(
             player.hand,
             winning_tile,
@@ -290,6 +391,7 @@ class MahjongEngine:
             self.round_wind,
             self.wall.get_dora_tiles(),
             self.wall.get_ura_dora_tiles() if player.hand.is_riichi else None,
+            **yaku_context,
         )
 
         if not any(yaku.name != "Dora" for yaku in yaku_list):
@@ -303,12 +405,15 @@ class MahjongEngine:
             winning_tile=winning_tile,
             seat_wind=player.seat_wind,
             round_wind=self.round_wind,
+            honba=self.honba,
         )
 
         # Apply payments
         self._apply_tsumo_payments(player_index, score, payments)
 
+        self._clear_pending_chankan()
         self.phase = GamePhase.ENDED
+        self._update_honba_after_win(winner_index=player_index)
 
         return {
             "success": True,
@@ -322,19 +427,41 @@ class MahjongEngine:
     def _execute_ron(self, player_index: int) -> Dict[str, Any]:
         """Execute ron (win on discard)"""
         player = self.players[player_index]
+        is_chankan = False
+        winning_tile: Optional[Tile] = None
+        discarder_index: Optional[int] = None
 
-        if not self.last_discard or not player.can_call_ron(self.last_discard):
+        if (
+            self.pending_chankan_tile
+            and player_index in self.pending_chankan_responders
+        ):
+            is_chankan = True
+            winning_tile = self.pending_chankan_tile
+            discarder_index = self.pending_chankan_from
+        elif self.last_discard:
+            winning_tile = self.last_discard
+            discarder_index = self.last_discard_player
+
+        if (
+            winning_tile is None
+            or discarder_index is None
+            or not player.can_call_ron(winning_tile)
+        ):
             return {"success": False, "message": "Cannot call ron"}
 
         # Calculate score
+        yaku_context = self._build_yaku_context(
+            player_index, is_tsumo=False, is_chankan=is_chankan
+        )
         yaku_list = YakuChecker.check_all_yaku(
             player.hand,
-            self.last_discard,
+            winning_tile,
             False,
             player.seat_wind,
             self.round_wind,
             self.wall.get_dora_tiles(),
             self.wall.get_ura_dora_tiles() if player.hand.is_riichi else None,
+            **yaku_context,
         )
 
         if not any(yaku.name != "Dora" for yaku in yaku_list):
@@ -345,13 +472,14 @@ class MahjongEngine:
             player.is_dealer,
             False,
             hand=player.hand,
-            winning_tile=self.last_discard,
+            winning_tile=winning_tile,
             seat_wind=player.seat_wind,
             round_wind=self.round_wind,
+            honba=self.honba,
         )
 
         # Apply payments
-        discarder = self.players[self.last_discard_player]
+        discarder = self.players[discarder_index]
         discarder.add_score(-score)
         player.add_score(score)
 
@@ -359,7 +487,9 @@ class MahjongEngine:
         player.add_score(self.riichi_bets * 1000)
         self.riichi_bets = 0
 
+        self._clear_pending_chankan()
         self.phase = GamePhase.ENDED
+        self._update_honba_after_win(winner_index=player_index)
 
         return {
             "success": True,
@@ -394,14 +524,42 @@ class MahjongEngine:
         player.declare_riichi(self.turn_number)
         self.riichi_bets += 1
 
-        discarded_tile = player.discard_tile(tile_to_discard)
+        discarded_tile = player.discard_tile(
+            tile_to_discard, from_riichi_declaration=True
+        )
         self.last_discard = discarded_tile
         self.last_discard_player = player_index
+        self.last_action_was_kan_draw = False
 
         return {
             "success": True,
             "message": f"{player.name} declared riichi and discarded {discarded_tile}",
         }
+
+    def _execute_pass(self, player_index: int) -> Dict[str, Any]:
+        player = self.players[player_index]
+
+        if self.pending_chankan_tile and player_index in self.pending_chankan_responders:
+            if player.can_call_ron(self.pending_chankan_tile):
+                player.hand.temp_furiten = True
+
+            self.pending_chankan_responders.discard(player_index)
+            if self.pending_chankan_responders:
+                return {"success": True, "message": "Passed chankan"}
+
+            kan_player = self.pending_chankan_from
+            kan_tile = self.pending_chankan_tile
+            self._clear_pending_chankan()
+            if kan_player is None or kan_tile is None:
+                return {"success": False, "message": "Invalid chankan state"}
+
+            return self._perform_added_kan(kan_player, kan_tile)
+
+        if self.last_discard and player_index != self.current_player:
+            if player.can_call_ron(self.last_discard):
+                player.hand.temp_furiten = True
+
+        return {"success": True, "message": "Passed"}
 
     def _execute_chii(self, player_index: int, sequence: List[str]) -> Dict[str, Any]:
         """Execute chii call"""
@@ -431,8 +589,11 @@ class MahjongEngine:
         full_sequence.sort(key=lambda t: t.value)
 
         player.call_chii(self.last_discard, full_sequence)
+        self._clear_ippatsu_all()
+        self.has_open_call = True
         self.current_player = player_index
         self.last_discard = None
+        self.last_action_was_kan_draw = False
 
         return {"success": True, "message": f"{player.name} called chii"}
 
@@ -444,8 +605,11 @@ class MahjongEngine:
             return {"success": False, "message": "Cannot call pon"}
 
         player.call_pon(self.last_discard, self.last_discard_player)
+        self._clear_ippatsu_all()
+        self.has_open_call = True
         self.current_player = player_index
         self.last_discard = None
+        self.last_action_was_kan_draw = False
 
         return {"success": True, "message": f"{player.name} called pon"}
 
@@ -459,6 +623,8 @@ class MahjongEngine:
                 return {"success": False, "message": "Cannot call kan"}
 
             player.call_kan(self.last_discard, self.last_discard_player)
+            self._clear_ippatsu_all()
+            self.has_open_call = True
             self.current_player = player_index
             self.last_discard = None
         else:
@@ -470,9 +636,11 @@ class MahjongEngine:
         self.wall.add_dora_indicator()
 
         # Player draws replacement tile
+        self.last_action_was_kan_draw = False
         if self.wall.tiles_remaining() > 0:
             replacement_tile = self.wall.draw_tile()
             player.draw_tile(replacement_tile)
+            self.last_action_was_kan_draw = True
 
         return {"success": True, "message": f"{player.name} called kan"}
 
@@ -500,7 +668,20 @@ class MahjongEngine:
         if player.can_upgrade_pon_to_kan(target_tile):
             if not self._riichi_kan_allowed(player, target_tile):
                 return {"success": False, "message": "Riichi kan restriction"}
-            player.upgrade_pon_to_kan(target_tile)
+            self._clear_ippatsu_all()
+            responders = self._find_chankan_responders(target_tile, player_index)
+            if responders:
+                self.pending_chankan_tile = target_tile
+                self.pending_chankan_from = player_index
+                self.pending_chankan_responders = set(responders)
+                return {
+                    "success": True,
+                    "message": "Added kan pending chankan responses",
+                    "pending_chankan": True,
+                    "responders": responders,
+                }
+
+            return self._perform_added_kan(player_index, target_tile)
         elif player.hand.concealed_tiles.count(target_tile) >= 4:
             if not self._riichi_kan_allowed(player, target_tile):
                 return {"success": False, "message": "Riichi kan restriction"}
@@ -508,13 +689,34 @@ class MahjongEngine:
         else:
             return {"success": False, "message": "Cannot declare kan"}
 
+        self._clear_ippatsu_all()
+
         # Add new dora indicator
         self.wall.add_dora_indicator()
 
         # Player draws replacement tile
+        self.last_action_was_kan_draw = False
         if self.wall.tiles_remaining() > 0:
             replacement_tile = self.wall.draw_tile()
             player.draw_tile(replacement_tile)
+            self.last_action_was_kan_draw = True
+
+        return {"success": True, "message": f"{player.name} declared kan"}
+
+    def _perform_added_kan(self, player_index: int, target_tile: Tile) -> Dict[str, Any]:
+        player = self.players[player_index]
+        player.upgrade_pon_to_kan(target_tile)
+        self.has_open_call = True
+
+        # Add new dora indicator
+        self.wall.add_dora_indicator()
+
+        # Player draws replacement tile
+        self.last_action_was_kan_draw = False
+        if self.wall.tiles_remaining() > 0:
+            replacement_tile = self.wall.draw_tile()
+            player.draw_tile(replacement_tile)
+            self.last_action_was_kan_draw = True
 
         return {"success": True, "message": f"{player.name} declared kan"}
 
@@ -563,6 +765,8 @@ class MahjongEngine:
     def _handle_draw(self) -> Dict[str, Any]:
         """Handle game draw (wall empty)"""
         self.phase = GamePhase.ENDED
+        self.honba += 1
+        self._clear_pending_chankan()
 
         # Check tenpai players
         tenpai_players = [i for i, p in enumerate(self.players) if p.is_tenpai()]
@@ -585,10 +789,18 @@ class MahjongEngine:
             "tenpai_players": tenpai_players,
         }
 
+    def _update_honba_after_win(self, winner_index: int):
+        winner = self.players[winner_index]
+        if winner.is_dealer:
+            self.honba += 1
+        else:
+            self.honba = 0
+
     def advance_turn(self):
         """Advance to next player's turn"""
         if self.last_discard is None:  # No calls were made
             self.current_player = (self.current_player + 1) % 4
+            self.last_action_was_kan_draw = False
 
             # Draw tile for new current player
             if self.wall.tiles_remaining() > 0:
@@ -612,6 +824,9 @@ class MahjongEngine:
         self.last_discard = None
         self.last_discard_player = None
         self.phase = GamePhase.DEALING
+        self.last_action_was_kan_draw = False
+        self.has_open_call = False
+        self._clear_pending_chankan()
 
         # Deal new hands
         self._deal_initial_hands()
@@ -778,14 +993,17 @@ class MahjongEngine:
 
         # Execute closed kan
         player.call_kan(target_tile)
+        self._clear_ippatsu_all()
 
         # Add dora indicator
         self.wall.add_dora_indicator()
 
         # Draw replacement tile
+        self.last_action_was_kan_draw = False
         if self.wall.tiles_remaining() > 0:
             replacement_tile = self.wall.draw_tile()
             player.draw_tile(replacement_tile)
+            self.last_action_was_kan_draw = True
 
         return {"success": True, "message": f"Declared closed kan of {target_tile}"}
 
@@ -819,6 +1037,9 @@ class MahjongEngine:
         self.honba = 0
         self.last_discard = None
         self.last_discard_player = None
+        self.last_action_was_kan_draw = False
+        self.has_open_call = False
+        self._clear_pending_chankan()
 
         # Set dealer
         self.players[0].is_dealer = True

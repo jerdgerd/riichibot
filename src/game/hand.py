@@ -40,12 +40,17 @@ class Hand:
         self.discards: List[Tile] = []
         self.is_riichi: bool = False
         self.riichi_turn: Optional[int] = None
+        self.ippatsu_eligible: bool = False
+        self.last_drawn_tile: Optional[Tile] = None
         self.furiten_state: bool = False
         self.temp_furiten: bool = False
 
     def add_tile(self, tile: Tile):
         """Add tile to concealed hand"""
         self.concealed_tiles.append(tile)
+        self.last_drawn_tile = tile
+        # Temporary furiten clears on the player's next draw.
+        self.temp_furiten = False
         self.concealed_tiles.sort(key=lambda t: (t.suit.value, t.value or 0))
 
     def remove_tile(self, tile: Tile) -> bool:
@@ -55,10 +60,14 @@ class Hand:
             return True
         return False
 
-    def discard_tile(self, tile: Tile):
+    def discard_tile(self, tile: Tile, *, from_riichi_declaration: bool = False):
         """Discard a tile"""
         if self.remove_tile(tile):
             self.discards.append(tile)
+            self.last_drawn_tile = None
+            # Ippatsu only survives until the player's first post-riichi discard.
+            if self.is_riichi and self.ippatsu_eligible and not from_riichi_declaration:
+                self.ippatsu_eligible = False
             self.temp_furiten = False  # Reset temp furiten
 
     def add_meld(self, meld: Meld):
@@ -160,16 +169,17 @@ class Hand:
         if len(tiles) != melds_needed * 3:
             return False
 
-        tiles_copy = tiles[:]
-        tiles_copy.sort(key=lambda t: (t.suit.value, t.value or 0))
+        tiles_sorted = tiles[:]
+        tiles_sorted.sort(key=lambda t: (t.suit.value, t.value or 0))
 
         # Try to form triplet first
-        first_tile = tiles_copy[0]
-        if tiles_copy.count(first_tile) >= 3:
+        first_tile = tiles_sorted[0]
+        if tiles_sorted.count(first_tile) >= 3:
             # Remove triplet
+            triplet_remaining = tiles_sorted[:]
             for _ in range(3):
-                tiles_copy.remove(first_tile)
-            if self._can_form_melds(tiles_copy, melds_needed - 1):
+                triplet_remaining.remove(first_tile)
+            if self._can_form_melds(triplet_remaining, melds_needed - 1):
                 return True
 
         # Try to form sequence (only for number tiles)
@@ -180,12 +190,13 @@ class Hand:
             tile2 = Tile(first_tile.suit, first_tile.value + 1)
             tile3 = Tile(first_tile.suit, first_tile.value + 2)
 
-            if tile2 in tiles_copy and tile3 in tiles_copy:
+            if tile2 in tiles_sorted and tile3 in tiles_sorted:
                 # Remove sequence
-                tiles_copy.remove(first_tile)
-                tiles_copy.remove(tile2)
-                tiles_copy.remove(tile3)
-                if self._can_form_melds(tiles_copy, melds_needed - 1):
+                sequence_remaining = tiles_sorted[:]
+                sequence_remaining.remove(first_tile)
+                sequence_remaining.remove(tile2)
+                sequence_remaining.remove(tile3)
+                if self._can_form_melds(sequence_remaining, melds_needed - 1):
                     return True
 
         return False
@@ -229,8 +240,8 @@ class Hand:
         return False
 
 
-    def check_furiten(self, all_discards: List[List[Tile]]) -> bool:
-        """Check if player is in furiten state"""
+    def check_furiten(self, all_discards: Optional[List[List[Tile]]] = None) -> bool:
+        """Check permanent furiten state (own discard furiten)."""
         winning_tiles = self.get_winning_tiles()
 
         # Check own discards
@@ -238,13 +249,6 @@ class Hand:
             if tile in winning_tiles:
                 self.furiten_state = True
                 return True
-
-        # Check called tiles in other players' melds
-        for player_discards in all_discards:
-            for tile in player_discards:
-                if tile in winning_tiles:
-                    self.furiten_state = True
-                    return True
 
         self.furiten_state = False
         return False
@@ -256,6 +260,7 @@ class Hand:
 
         self.is_riichi = True
         self.riichi_turn = turn
+        self.ippatsu_eligible = True
 
     def get_all_tiles(self) -> List[Tile]:
         """Get all tiles in hand (concealed + melds)"""
