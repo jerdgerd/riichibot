@@ -894,7 +894,7 @@ class MahjongEngine:
         for i, p in enumerate(self.players):
             if i != player_index and p.is_tenpai():
                 winning_tiles = p.hand.get_winning_tiles()
-                safe_tiles -= winning_tiles
+                safe_tiles -= set(winning_tiles)
 
         return [str(tile) for tile in safe_tiles if tile in player.hand.concealed_tiles]
 
