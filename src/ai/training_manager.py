@@ -1,6 +1,5 @@
 import json
 import os
-import time
 from typing import Any, Dict, List
 
 import matplotlib.pyplot as plt
@@ -37,12 +36,17 @@ class TrainingManager:
 
         return players
 
-    def train_players(self, num_games: int = 1000, save_interval: int = 100):
+    def train_players(
+        self,
+        num_games: int = 1000,
+        save_interval: int = 100,
+        learning_rate: float = 0.001,
+    ):
         """Train neural network players through self-play"""
         print(f"Starting training for {num_games} games...")
 
         # Create players
-        neural_players = self.create_neural_players()
+        neural_players = self.create_neural_players(learning_rate=learning_rate)
 
         # Load existing models if available
         for i, player in enumerate(neural_players):
@@ -51,8 +55,6 @@ class TrainingManager:
                 player.load_model(model_path)
                 print(f"Loaded existing model for {player.name}")
 
-        game_results = []
-
         for game_num in range(num_games):
             print(f"\nGame {game_num + 1}/{num_games}")
 
@@ -60,13 +62,16 @@ class TrainingManager:
             player_names = [p.name for p in neural_players]
             game = MahjongEngine(player_names)
 
-            # Replace default players with neural players
+            # Copy dealt game state into persistent neural players then replace table players
+            for i, neural_player in enumerate(neural_players):
+                neural_player.hand = game.players[i].hand
+                neural_player.score = game.players[i].score
+                neural_player.seat_wind = game.players[i].seat_wind
+                neural_player.is_dealer = game.players[i].is_dealer
             game.players = neural_players
 
             # Play the game
             result = self.play_training_game(game, neural_players)
-            game_results.append(result)
-
             # Update statistics
             self.update_training_stats(neural_players, result)
 
@@ -91,6 +96,7 @@ class TrainingManager:
         """Play a single training game"""
         max_turns = 200  # Prevent infinite games
         turn_count = 0
+        result: Dict[str, Any] = {"winner": -1}
 
         while game.phase.value != "ended" and turn_count < max_turns:
             current_player_idx = game.current_player
@@ -100,6 +106,11 @@ class TrainingManager:
             game_state = game.get_game_state()
             player_hand = game.get_player_hand(current_player_idx)
             valid_actions = game.get_valid_actions(current_player_idx)
+
+            if not valid_actions:
+                # Defensive guard for malformed game state
+                current_player.give_reward(-1.0)
+                break
 
             # Player chooses action
             action, kwargs = current_player.choose_action(
@@ -313,6 +324,14 @@ class TrainingManager:
         self, results: List[Dict[str, Any]], players: List[NeuralPlayer]
     ) -> Dict[str, Any]:
         """Calculate evaluation statistics"""
+        if not results:
+            return {
+                "win_rates": [0.0] * 4,
+                "avg_scores": [0.0] * 4,
+                "total_games": 0,
+                "wins": [0] * 4,
+            }
+
         wins = [0] * 4
         total_scores = [0] * 4
 
