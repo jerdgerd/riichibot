@@ -1,6 +1,5 @@
 import json
 import os
-import time
 from typing import Any, Dict, List
 
 from ai.config import TrainingConfig
@@ -143,6 +142,7 @@ class EnhancedTrainingManager:
 
         max_turns = 200
         turn_count = 0
+        result: Dict[str, Any] = {"winner": -1}
 
         while game.phase.value != "ended" and turn_count < max_turns:
             current_player_idx = game.current_player
@@ -192,7 +192,10 @@ class EnhancedTrainingManager:
                     final_reward = self.calculate_final_reward(
                         won, final_scores[i], result
                     )
-                    player.update_game_result(won, final_scores[i])
+                    player.give_reward(final_reward, done=True)
+                    player.total_games += 1
+                    if won:
+                        player.wins += 1
 
                 break
 
@@ -452,6 +455,14 @@ class EnhancedTrainingManager:
                 total_scores[i] += score
 
         num_games = len(eval_results)
+        if num_games == 0:
+            return {
+                "win_rates": [0.0] * 4,
+                "avg_scores": [0.0] * 4,
+                "total_games": 0,
+                "wins": wins,
+            }
+
         win_rates = [w / num_games for w in wins]
         avg_scores = [s / num_games for s in total_scores]
 
