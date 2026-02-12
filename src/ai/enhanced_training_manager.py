@@ -183,36 +183,60 @@ class EnhancedTrainingManager:
 
             # Check if game ended
             if result.get("game_ended", False):
-                winner_idx = result.get("winner")
-                final_scores = [p.score for p in game.players]
-
-                # Give final rewards with enhanced scoring
-                for i, player in enumerate(players):
-                    won = i == winner_idx
-                    final_reward = self.calculate_final_reward(
-                        won, final_scores[i], result
-                    )
-                    player.give_reward(final_reward, done=True)
-                    player.total_games += 1
-                    if won:
-                        player.wins += 1
-
+                self._finalize_game_rewards(players, game, result)
                 break
 
-            # Simple turn advancement - only advance if it was a discard and no calls
-            if action == "discard" and game.last_discard is not None:
-                # Let other players respond in next iterations
-                pass
-            elif action == "pass":
-                # Continue to next player who might want to call
-                pass
-            elif action in ["chii", "pon", "kan"]:
-                # Caller becomes current player (handled in execute_action)
-                game.last_discard = None  # Clear the discard
+            # Handle reactions to discard/riichi in proper player order.
+            if action in ["discard", "riichi"] and game.last_discard is not None:
+                call_was_made = False
 
-            # Check if we should advance turn (no pending calls)
-            if self._should_advance_turn(game, action):
-                game.advance_turn()
+                for offset in range(1, 4):
+                    responder_idx = (current_player_idx + offset) % 4
+                    responder = players[responder_idx]
+                    responder_state = game.get_game_state()
+                    responder_hand = game.get_player_hand(responder_idx)
+                    responder_actions = game.get_valid_actions(responder_idx)
+
+                    if not responder_actions:
+                        continue
+
+                    response_action, response_kwargs = responder.choose_action(
+                        responder_state, responder_hand, responder_actions
+                    )
+                    response_result = game.execute_action(
+                        responder_idx, response_action, **response_kwargs
+                    )
+
+                    if response_result["success"]:
+                        response_reward = self.calculate_enhanced_reward(
+                            response_action,
+                            response_result,
+                            responder_hand,
+                            responder_state,
+                        )
+                        responder.give_reward(response_reward)
+                    else:
+                        responder.give_reward(self.config.invalid_action_penalty)
+
+                    if response_result.get("game_ended", False):
+                        result = response_result
+                        self._finalize_game_rewards(players, game, result)
+                        return {
+                            "winner": result.get("winner", -1),
+                            "final_scores": [p.score for p in game.players],
+                            "turns": turn_count,
+                            "game_ended_normally": True,
+                            "yaku": result.get("yaku", []),
+                            "score": result.get("score", 0),
+                        }
+
+                    if response_result["success"] and response_action != "pass":
+                        call_was_made = True
+                        break
+
+                if not call_was_made and game.last_discard is not None:
+                    game.last_discard = None
+                    game.advance_turn()
 
             turn_count += 1
 
@@ -230,6 +254,20 @@ class EnhancedTrainingManager:
             "yaku": result.get("yaku", []),
             "score": result.get("score", 0),
         }
+
+    def _finalize_game_rewards(
+        self, players: List[NeuralPlayer], game: MahjongEngine, result: Dict[str, Any]
+    ):
+        winner_idx = result.get("winner")
+        final_scores = [p.score for p in game.players]
+
+        for i, player in enumerate(players):
+            won = i == winner_idx
+            final_reward = self.calculate_final_reward(won, final_scores[i], result)
+            player.give_reward(final_reward, done=True)
+            player.total_games += 1
+            if won:
+                player.wins += 1
 
     def _should_advance_turn(self, game, last_action):
         """Determine if turn should advance"""
