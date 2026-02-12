@@ -1,5 +1,6 @@
 import random
 from collections import deque
+from collections import Counter
 from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -270,7 +271,13 @@ class NeuralPlayer(Player):
             if player_hand["concealed_tiles"]:
                 return {"tile": random.choice(player_hand["concealed_tiles"])}
         elif action == "chii":
-            return {"sequence": []}
+            sequence = self._pick_chii_sequence(player_hand)
+            if sequence:
+                return {"sequence": sequence}
+        elif action == "kan":
+            kan_tile = self._get_kan_tile(player_hand)
+            if kan_tile:
+                return {"tile": kan_tile}
 
         return {}
 
@@ -279,8 +286,83 @@ class NeuralPlayer(Player):
     ) -> Dict[str, Any]:
         """Get kwargs for call actions"""
         if action == "chii":
-            return {"sequence": []}
+            sequence = self._pick_chii_sequence(player_hand)
+            if sequence:
+                return {"sequence": sequence}
+        if action == "kan":
+            kan_tile = self._get_kan_tile(player_hand)
+            if kan_tile:
+                return {"tile": kan_tile}
         return {}
+
+    def _get_kan_tile(self, player_hand: Dict[str, Any]) -> Optional[str]:
+        """Get tile string for closed/added kan actions when needed."""
+        for key in ("upgrade_kan_tiles", "closed_kan_tiles"):
+            tiles = player_hand.get(key, [])
+            if tiles:
+                return tiles[0]
+
+        # Defensive fallback for incomplete hand payloads.
+        counts = Counter(player_hand.get("concealed_tiles", []))
+        for tile, count in counts.items():
+            if count >= 4:
+                return tile
+
+        return None
+
+    def _pick_chii_sequence(self, player_hand: Dict[str, Any]) -> List[str]:
+        """Return a valid two-tile chii sequence from concealed tiles if possible."""
+        last_discard = player_hand.get("last_discard")
+        if not last_discard:
+            return []
+
+        parsed = self._parse_number_tile(last_discard)
+        if parsed is None:
+            return []
+
+        discard_value, discard_suit = parsed
+        concealed = Counter(player_hand.get("concealed_tiles", []))
+
+        for offset in (-2, -1, 0):
+            start = discard_value + offset
+            if start < 1 or start > 7:
+                continue
+
+            needed: List[str] = []
+            for i in range(3):
+                value = start + i
+                tile = f"{value}{discard_suit}"
+                if value == discard_value:
+                    continue
+                needed.append(tile)
+
+            local_counts = concealed.copy()
+            valid = True
+            for tile in needed:
+                if local_counts[tile] <= 0:
+                    valid = False
+                    break
+                local_counts[tile] -= 1
+
+            if valid:
+                return needed
+
+        return []
+
+    def _parse_number_tile(self, tile_str: str) -> Optional[Tuple[int, str]]:
+        """Parse tile string like '5sou' or red-five '5rsou'."""
+        if not tile_str or len(tile_str) < 4 or not tile_str[0].isdigit():
+            return None
+
+        value = int(tile_str[0])
+        remainder = tile_str[1:]
+        if remainder.startswith("r"):
+            remainder = remainder[1:]
+
+        if remainder not in {"sou", "pin", "man"}:
+            return None
+
+        return value, remainder
 
     def remember(
         self,

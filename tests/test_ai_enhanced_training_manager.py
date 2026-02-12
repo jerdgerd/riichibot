@@ -300,3 +300,100 @@ def test_enhanced_manager_turn_flow_branches(monkeypatch, tmp_path):
     players2[0].choose_action = lambda s, h, v: ("pass", {})
     monkeypatch.setattr(etm, "MahjongEngine", lambda names: PassGame(names))
     manager.play_training_game(players2)
+
+class ResponderActionGame(DummyGame):
+    def __init__(self, names):
+        super().__init__(names, ended=False, no_actions=False)
+        self.last_discard = object()
+        self.step = 0
+
+    def get_valid_actions(self, idx):
+        if self.step == 0 and idx == 0:
+            return ["discard"]
+        if idx == 1:
+            return []  # cover responder continue branch
+        if idx == 2:
+            return ["pon"]
+        return ["pass"]
+
+    def execute_action(self, idx, action, **kwargs):
+        self.step += 1
+        if self.step == 1:
+            return {"success": True, "game_ended": False, "message": "discarded"}
+        # responder action succeeds and ends game
+        return {
+            "success": True,
+            "game_ended": True,
+            "winner": idx,
+            "message": "won",
+            "yaku": [{"name": "riichi"}],
+            "score": 3900,
+            "final_scores": [24000, 24000, 28000, 24000],
+        }
+
+
+def test_enhanced_manager_responder_branches(monkeypatch, tmp_path):
+    etm, TrainingConfig = _load_modules(monkeypatch)
+    monkeypatch.setattr(etm, "NeuralPlayer", DummyPlayer)
+    monkeypatch.setattr(etm, "TrainingLogger", DummyLogger)
+    monkeypatch.setattr(etm, "PerformanceAnalyzer", DummyAnalyzer)
+    monkeypatch.setattr(etm, "MahjongEngine", lambda names: ResponderActionGame(names))
+
+    manager = etm.EnhancedTrainingManager(
+        TrainingConfig(num_games=1, eval_games=0),
+        save_dir=str(tmp_path),
+        experiment_name="x",
+    )
+
+    players = manager.create_neural_players()
+    players[0].choose_action = lambda s, h, v: ("discard", {})
+    players[2].choose_action = lambda s, h, v: ("pon", {})
+
+    out = manager.play_training_game(players)
+
+    assert out["winner"] == 2
+    assert out["game_ended_normally"] is True
+    assert any(done for _, done in players[2].rewards)
+
+class ResponderCallNoEndGame(DummyGame):
+    def __init__(self, names):
+        super().__init__(names, ended=False, no_actions=False)
+        self.last_discard = object()
+        self.step = 0
+
+    def get_valid_actions(self, idx):
+        if idx == 0:
+            return ["discard"]
+        if idx == 1:
+            return ["pon"]
+        return ["pass"]
+
+    def execute_action(self, idx, action, **kwargs):
+        self.step += 1
+        if self.step == 1:
+            return {"success": True, "game_ended": False, "message": "discarded"}
+        return {"success": True, "game_ended": False, "message": "called"}
+
+
+def test_enhanced_manager_call_was_made_branch_and_default_should_advance(monkeypatch, tmp_path):
+    etm, TrainingConfig = _load_modules(monkeypatch)
+    monkeypatch.setattr(etm, "NeuralPlayer", DummyPlayer)
+    monkeypatch.setattr(etm, "TrainingLogger", DummyLogger)
+    monkeypatch.setattr(etm, "PerformanceAnalyzer", DummyAnalyzer)
+    monkeypatch.setattr(etm, "MahjongEngine", lambda names: ResponderCallNoEndGame(names))
+
+    manager = etm.EnhancedTrainingManager(
+        TrainingConfig(num_games=1, eval_games=0),
+        save_dir=str(tmp_path),
+        experiment_name="x",
+    )
+
+    players = manager.create_neural_players()
+    players[0].choose_action = lambda s, h, v: ("discard", {})
+    players[1].choose_action = lambda s, h, v: ("pon", {})
+
+    out = manager.play_training_game(players)
+    assert out["game_ended_normally"] is False
+
+    game = DummyGame(["a", "b", "c", "d"])
+    assert manager._should_advance_turn(game, "pass") is False

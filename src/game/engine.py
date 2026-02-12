@@ -121,6 +121,7 @@ class MahjongEngine:
             "can_riichi": self._can_declare_riichi(player_index),
             "closed_kan_tiles": self.can_call_closed_kan(player_index),
             "upgrade_kan_tiles": self.can_upgrade_pon_to_kan(player_index),
+            "last_discard": str(self.last_discard) if self.last_discard else None,
         }
 
     def get_valid_actions(self, player_index: int) -> List[str]:
