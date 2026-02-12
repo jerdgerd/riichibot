@@ -53,3 +53,19 @@ def test_train_cli_eval_only(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["train_ai.py", "--eval-only", "--eval-games", "4"])
     train_ai.main()
     assert holder["trainer"].calls == [("eval", 4)]
+
+
+
+def test_train_cli_main_module_entry(monkeypatch):
+    import runpy
+
+    holder = {}
+
+    def factory(save_dir):
+        holder["trainer"] = DummyTrainer(save_dir)
+        return holder["trainer"]
+
+    monkeypatch.setitem(sys.modules, "ai.training_manager", types.SimpleNamespace(TrainingManager=factory))
+    monkeypatch.setattr(sys, "argv", ["train_ai.py", "--eval-only", "--eval-games", "1"])
+    runpy.run_path("src/ai/train_ai.py", run_name="__main__")
+    assert holder["trainer"].calls == [("eval", 1)]

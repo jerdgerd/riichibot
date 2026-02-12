@@ -55,8 +55,6 @@ class TrainingManager:
                 player.load_model(model_path)
                 print(f"Loaded existing model for {player.name}")
 
-        game_results = []
-
         for game_num in range(num_games):
             print(f"\nGame {game_num + 1}/{num_games}")
 
@@ -64,13 +62,16 @@ class TrainingManager:
             player_names = [p.name for p in neural_players]
             game = MahjongEngine(player_names)
 
-            # Replace default players with neural players
+            # Copy dealt game state into persistent neural players then replace table players
+            for i, neural_player in enumerate(neural_players):
+                neural_player.hand = game.players[i].hand
+                neural_player.score = game.players[i].score
+                neural_player.seat_wind = game.players[i].seat_wind
+                neural_player.is_dealer = game.players[i].is_dealer
             game.players = neural_players
 
             # Play the game
             result = self.play_training_game(game, neural_players)
-            game_results.append(result)
-
             # Update statistics
             self.update_training_stats(neural_players, result)
 
@@ -105,6 +106,11 @@ class TrainingManager:
             game_state = game.get_game_state()
             player_hand = game.get_player_hand(current_player_idx)
             valid_actions = game.get_valid_actions(current_player_idx)
+
+            if not valid_actions:
+                # Defensive guard for malformed game state
+                current_player.give_reward(-1.0)
+                break
 
             # Player chooses action
             action, kwargs = current_player.choose_action(
