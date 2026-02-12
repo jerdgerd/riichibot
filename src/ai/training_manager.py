@@ -1,6 +1,5 @@
 import json
 import os
-import time
 from typing import Any, Dict, List
 
 import matplotlib.pyplot as plt
@@ -37,12 +36,17 @@ class TrainingManager:
 
         return players
 
-    def train_players(self, num_games: int = 1000, save_interval: int = 100):
+    def train_players(
+        self,
+        num_games: int = 1000,
+        save_interval: int = 100,
+        learning_rate: float = 0.001,
+    ):
         """Train neural network players through self-play"""
         print(f"Starting training for {num_games} games...")
 
         # Create players
-        neural_players = self.create_neural_players()
+        neural_players = self.create_neural_players(learning_rate=learning_rate)
 
         # Load existing models if available
         for i, player in enumerate(neural_players):
@@ -91,6 +95,7 @@ class TrainingManager:
         """Play a single training game"""
         max_turns = 200  # Prevent infinite games
         turn_count = 0
+        result: Dict[str, Any] = {"winner": -1}
 
         while game.phase.value != "ended" and turn_count < max_turns:
             current_player_idx = game.current_player
@@ -313,6 +318,14 @@ class TrainingManager:
         self, results: List[Dict[str, Any]], players: List[NeuralPlayer]
     ) -> Dict[str, Any]:
         """Calculate evaluation statistics"""
+        if not results:
+            return {
+                "win_rates": [0.0] * 4,
+                "avg_scores": [0.0] * 4,
+                "total_games": 0,
+                "wins": [0] * 4,
+            }
+
         wins = [0] * 4
         total_scores = [0] * 4
 

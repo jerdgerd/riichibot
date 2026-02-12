@@ -59,7 +59,11 @@ def main():
         trainer.evaluate_players(args.eval_games)
     else:
         # Run training
-        trainer.train_players(num_games=args.games, save_interval=args.save_interval)
+        trainer.train_players(
+            num_games=args.games,
+            save_interval=args.save_interval,
+            learning_rate=args.learning_rate,
+        )
 
         # Run evaluation after training
         trainer.evaluate_players(args.eval_games)
